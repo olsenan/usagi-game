@@ -1,0 +1,22 @@
+body {
+  margin: 0;
+  padding: 0;
+  background: black;
+  overflow: hidden;
+}
+#gameCanvas {
+  display: block;
+  margin: auto;
+  background: #000;
+}
+#controls {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+#controls button {
+  font-size: 24px;
+  margin: 5px;
+  padding: 10px 20px;
+}
