@@ -5,12 +5,14 @@ body {
   font-family: monospace;
   text-align: center;
 }
+#title-screen {
+  position: absolute;
+  width: 100%;
+  top: 40%;
+}
 #gameCanvas {
   display: none;
-  width: 100%;
+  width: 100vw;
   height: 100vh;
-  background: #87ceeb;
-}
-#title-screen {
-  margin-top: 40vh;
+  background: #444;
 }
