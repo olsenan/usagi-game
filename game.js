@@ -1,17 +1,17 @@
-// game.js — Usagi SNES sheet (256x384 per frame), 3x3 grid (FINAL)
+// game.js — Usagi SNES sheet (256x384 per frame), pixel-perfect + aligned
 (function () {
   'use strict';
 
-  // Paths
   const BG_PATH    = 'assets/background1.png';
-  const USAGI_PATH = 'assets/usagi_snes_sheet.png'; // make sure this exists
+  const USAGI_PATH = 'assets/usagi_snes_sheet.png';
   const ENEMY_PATH = 'assets/enemy_sprites.png';
 
-  // Usagi frame size from your sheet
   const FRAME_W = 256;
   const FRAME_H = 384;
 
-  // State
+  // Use an integer scale to avoid sub-pixel seams (0.25 = quarter size)
+  const SCALE = 0.25;         // 256x384 -> 64x96 on screen (SNES-y, crisp)
+
   const S = {
     game:null, player:null, cursors:null,
     ground:null, groundY:0, enemies:null, attackHit:null,
@@ -19,7 +19,6 @@
     canAttack:true
   };
 
-  // Mobile buttons
   function wireTouchButtons(){
     const btns = document.querySelectorAll('#touchControls .ctl');
     btns.forEach(btn=>{
@@ -31,7 +30,6 @@
     });
   }
 
-  // Title → boot game
   function armStart(){
     const title = document.getElementById('title');
     const start = document.getElementById('startBtn');
@@ -42,6 +40,8 @@
       S.game = new Phaser.Game({
         type:Phaser.AUTO, parent:'game',
         width:window.innerWidth, height:window.innerHeight,
+        pixelArt:true,                                  // <-- crispy pixels
+        render:{ pixelArt:true, antialias:false, roundPixels:true },
         physics:{ default:'arcade', arcade:{ gravity:{y:800}, debug:false }},
         scene:{ preload, create, update }
       });
@@ -54,19 +54,21 @@
     document.addEventListener('keydown',e=>{ if(e.key==='Enter') boot(); });
   }
 
-  // Phaser: preload
   function preload(){
     this.load.image('bg', BG_PATH);
     this.load.spritesheet('usagi', USAGI_PATH, { frameWidth: FRAME_W, frameHeight: FRAME_H });
     this.load.spritesheet('enemies', ENEMY_PATH, { frameWidth: 64, frameHeight: 64 });
   }
 
-  // Phaser: create
   function create(){
     const w=this.scale.width, h=this.scale.height;
 
     // Background
     this.add.image(0,0,'bg').setOrigin(0).setDisplaySize(w,h);
+
+    // Make sure textures use nearest-neighbour (no blur)
+    this.textures.get('usagi')?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.textures.get('enemies')?.setFilter(Phaser.Textures.FilterMode.NEAREST);
 
     // Ground
     S.groundY = h - 110;
@@ -74,32 +76,42 @@
     this.physics.add.existing(ground, true);
     S.ground = ground;
 
-    // Animations (frames 0..8 reading order)
+    // Animations
     this.anims.create({ key:'idle',   frames:[{ key:'usagi', frame:1 }], frameRate:1, repeat:-1 });
     this.anims.create({ key:'walk',   frames:this.anims.generateFrameNumbers('usagi',{start:0,end:2}), frameRate:10, repeat:-1 });
     this.anims.create({ key:'attack', frames:this.anims.generateFrameNumbers('usagi',{start:3,end:5}), frameRate:14, repeat:0 });
 
-    // Player
+    // Player (pixel-perfect)
     S.player = this.physics.add.sprite(120, S.groundY, 'usagi', 1)
       .setOrigin(0.5,1)
-      .setCollideWorldBounds(true);
+      .setCollideWorldBounds(true)
+      .setScale(SCALE);
 
-    // Scale to ~128px tall (keeps original pixels)
-    const targetH = 128;
-    S.player.setScale(targetH / FRAME_H);
+    // Tight body + offset so feet sit on the ground line
+    // Choose a sensible hitbox in *source* pixels, then convert to unscaled body:
+    const hitW_src = 56, hitH_src = 88;                 // around torso/legs in art
+    const bodyW = Math.round(hitW_src / SCALE);         // convert to physics pixels
+    const bodyH = Math.round(hitH_src / SCALE);
+    S.player.body.setSize(bodyW, bodyH);
+
+    // Center horizontally; vertically bottom-align leaving a small foot margin (4px at display scale)
+    const displayH = FRAME_H * SCALE;                   // 384 * 0.25 = 96
+    const footMargin = 4;                               // display pixels
+    const offX = Math.round(((FRAME_W * SCALE) - (bodyW * SCALE)) / 2 / SCALE);
+    const offY = Math.round(((FRAME_H * SCALE) - (bodyH * SCALE) - footMargin) / SCALE);
+    S.player.body.setOffset(offX, offY);
 
     this.physics.add.collider(S.player, S.ground);
 
-    // Unlock movement when attack ends
     S.player.on('animationcomplete', (anim)=>{
       if(anim.key==='attack'){ S.player.isAttacking=false; }
     });
 
-    // Keyboard
+    // Input
     S.cursors = this.input.keyboard.createCursorKeys();
     this.input.keyboard.on('keydown-SPACE', ()=>tryAttack(), this);
 
-    // Attack hitbox (sensor)
+    // Attack hitbox
     S.attackHit = this.add.rectangle(0,0, 56, 44, 0xff0000, 0);
     this.physics.add.existing(S.attackHit, false);
     S.attackHit.body.setAllowGravity(false);
@@ -114,12 +126,10 @@
       setTimeout(()=>enemy && enemy.clearTint && enemy.clearTint(), 220);
     });
 
-    // Spawn loop
     spawnEnemy(this);
     this.time.addEvent({ delay:1700, loop:true, callback:()=>spawnEnemy(this) });
   }
 
-  // Phaser: update
   function update(){
     const p=S.player; if(!p||!p.body) return;
 
@@ -141,7 +151,6 @@
     S.enemies.children.iterate(e=>{ if(e && e.x < -e.width) e.destroy(); });
   }
 
-  // Attack
   function tryAttack(){
     if(!S.canAttack || !S.player) return;
     S.canAttack=false;
@@ -152,11 +161,9 @@
     S.attackHit.setPosition(S.player.x + 40*dir, S.player.y - 30);
     S.attackHit.body.setEnable(true);
 
-    // Safety timer so movement never gets stuck
     setTimeout(()=>{ S.attackHit.body.setEnable(false); S.player.isAttacking=false; S.canAttack=true; }, 400);
   }
 
-  // Enemy spawn
   function spawnEnemy(scene){
     const w = scene.scale.width;
     const e = S.enemies.create(w+40, S.groundY, 'enemies', 0);
@@ -165,7 +172,6 @@
     e.body.setAllowGravity(true);
   }
 
-  // Boot
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded', ()=>{ wireTouchButtons(); armStart(); });
   } else {
