@@ -1,109 +1,89 @@
-// game.js — SNES style Usagi version
+// game.js — Phaser version
+'use strict';
 
-const config = {
+let game;
+
+function startPhaserGame() {
+  const config = {
     type: Phaser.AUTO,
     width: window.innerWidth,
     height: window.innerHeight,
-    parent: "game",
+    parent: 'game',
     physics: {
-        default: "arcade",
-        arcade: {
-            gravity: { y: 800 },
-            debug: false
-        }
+      default: 'arcade',
+      arcade: { gravity: { y: 800 }, debug: false }
     },
     scene: { preload, create, update }
-};
-
-let player, cursors, startBtn, gameStarted = false;
-
-const game = new Phaser.Game(config);
-
-function preload() {
-    // Load background + sprites
-    this.load.image("background", "assets/background1.png");
-    this.load.spritesheet("usagi",
-        "assets/snes_usagi_spritesheet.png",
-        { frameWidth: 64, frameHeight: 64 }
-    );
-
-    // Example enemies
-    this.load.spritesheet("enemy",
-        "assets/enemy_ninja.png",
-        { frameWidth: 64, frameHeight: 64 }
-    );
+  };
+  game = new Phaser.Game(config);
+  document.getElementById('title').style.display = 'none';
 }
 
+// --- Scene functions ---
+function preload() {
+  this.load.image('bg', 'assets/background1.png');
+  this.load.spritesheet('usagi', 'assets/snes_usagi_spritesheet.png', { frameWidth: 64, frameHeight: 96 });
+  this.load.spritesheet('enemies', 'assets/enemy_sprites.png', { frameWidth: 64, frameHeight: 64 });
+}
+
+let player;
+let cursors;
+let enemies;
+
 function create() {
-    // Background
-    this.add.image(config.width / 2, config.height / 2, "background")
-        .setDisplaySize(config.width, config.height);
+  // background
+  this.add.image(0, 0, 'bg').setOrigin(0).setDisplaySize(this.sys.game.config.width, this.sys.game.config.height);
 
-    // Usagi
-    player = this.physics.add.sprite(100, config.height - 150, "usagi");
-    player.setCollideWorldBounds(true);
-    player.setScale(2); // Makes sprite look sharper SNES style
+  // player
+  player = this.physics.add.sprite(100, this.sys.game.config.height - 150, 'usagi');
+  player.setCollideWorldBounds(true);
 
-    // Player animations
-    this.anims.create({
-        key: "idle",
-        frames: this.anims.generateFrameNumbers("usagi", { start: 0, end: 3 }),
-        frameRate: 6,
-        repeat: -1
-    });
-    this.anims.create({
-        key: "walk",
-        frames: this.anims.generateFrameNumbers("usagi", { start: 4, end: 7 }),
-        frameRate: 10,
-        repeat: -1
-    });
-    this.anims.create({
-        key: "attack",
-        frames: this.anims.generateFrameNumbers("usagi", { start: 8, end: 11 }),
-        frameRate: 12,
-        repeat: 0
-    });
+  // simple walk animation
+  this.anims.create({
+    key: 'walk',
+    frames: this.anims.generateFrameNumbers('usagi', { start: 0, end: 4 }),
+    frameRate: 8,
+    repeat: -1
+  });
 
-    player.play("idle");
+  // cursors
+  cursors = this.input.keyboard.createCursorKeys();
 
-    // Keyboard input
-    cursors = this.input.keyboard.createCursorKeys();
-    this.input.keyboard.on("keydown-SPACE", () => player.play("attack", true));
-
-    // Mobile start button
-    const startOverlay = document.getElementById("title");
-    startBtn = document.getElementById("startBtn");
-
-    const startGame = () => {
-        if (!gameStarted) {
-            gameStarted = true;
-            startOverlay.style.display = "none";
-        }
-    };
-
-    // Start via button, tap, or Enter
-    startBtn.onclick = startGame;
-    this.input.on("pointerdown", startGame);
-    this.input.keyboard.on("keydown-ENTER", startGame);
+  // enemies group
+  enemies = this.physics.add.group();
+  spawnEnemy(this);
 }
 
 function update() {
-    if (!gameStarted) return;
+  if (!player) return;
 
-    if (cursors.left.isDown) {
-        player.setVelocityX(-200);
-        player.play("walk", true);
-        player.setFlipX(true);
-    } else if (cursors.right.isDown) {
-        player.setVelocityX(200);
-        player.play("walk", true);
-        player.setFlipX(false);
-    } else {
-        player.setVelocityX(0);
-        player.play("idle", true);
-    }
+  player.setVelocityX(0);
 
-    if (cursors.up.isDown && player.body.touching.down) {
-        player.setVelocityY(-450);
-    }
+  if (cursors.left.isDown) {
+    player.setVelocityX(-160);
+    player.anims.play('walk', true);
+    player.flipX = true;
+  } else if (cursors.right.isDown) {
+    player.setVelocityX(160);
+    player.anims.play('walk', true);
+    player.flipX = false;
+  } else {
+    player.anims.stop();
+  }
+
+  if (cursors.space.isDown && player.body.touching.down) {
+    player.setVelocityY(-400);
+  }
 }
+
+// Spawn enemies
+function spawnEnemy(scene) {
+  const enemy = enemies.create(scene.sys.game.config.width - 50, scene.sys.game.config.height - 150, 'enemies');
+  enemy.setCollideWorldBounds(true);
+  enemy.setVelocityX(-50);
+  scene.time.addEvent({ delay: 3000, callback: () => spawnEnemy(scene) });
+}
+
+// --- Start button wiring ---
+document.getElementById('startBtn').addEventListener('click', startPhaserGame);
+document.getElementById('startBtn').addEventListener('touchstart', e => { e.preventDefault(); startPhaserGame(); });
