@@ -1,3 +1,12 @@
+const ASSETS = {
+  bg1: "assets/background1.png",
+  bg2: "assets/background2.png",
+  bg3: "assets/background3.png",
+  player: "assets/spritesheet.png",
+  bandit: "assets/enemy_bandit.png",
+  ninja: "assets/enemy_ninja.png"
+};
+
 // --- Canvas: fit to screen with devicePixelRatio for crisp pixels ---
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
