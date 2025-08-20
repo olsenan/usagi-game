@@ -11,17 +11,17 @@
     #title .hint{opacity:.85;margin:.25rem 0}
     #startBtn{padding:.7rem 1.25rem;border-radius:14px;font-size:1.05rem;background:#16a34a;color:#fff;border:0}
 
-    /* Mobile controls visible (can sit under title until game starts) */
+    /* Touch controls (can sit under title until game starts) */
     #touchControls{position:fixed;left:12px;right:12px;bottom:12px;display:flex;justify-content:space-between;gap:12px;z-index:2000}
     #touchControls .ctl{font-size:24px;padding:14px 18px;border-radius:14px}
 
-    /* Status/debug banner */
-    #status{position:fixed;left:0;top:0;right:0;z-index:10000;font:12px/1.35 monospace;background:rgba(0,0,0,.75);color:#fff;padding:6px 8px;display:none;white-space:pre-wrap}
+    /* Status/debug banner (never block taps) */
+    #status{position:fixed;left:0;top:0;right:0;z-index:10000;font:12px/1.35 monospace;background:rgba(0,0,0,.75);color:#fff;padding:6px 8px;display:none;white-space:pre-wrap;pointer-events:none}
   </style>
 </head>
 <body>
   <!-- Title Screen -->
-  <div id="title">
+  <div id="title" role="button" tabindex="0" aria-label="Tap to start the game">
     <h1>Usagi Yojimbo</h1>
     <p class="hint">Tap anywhere or press Start</p>
     <button id="startBtn" aria-label="Start Game">Start</button>
@@ -54,8 +54,8 @@
     </div>
   </div>
 
-  <!-- IMPORTANT: scripts at the very end so DOM exists -->
+  <!-- Scripts LAST so DOM exists -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js"></script>
-  <script src="game.js?v=boot3"></script>
+  <script src="game.js?v=boot4"></script>
 </body>
 </html>
