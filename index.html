@@ -30,7 +30,19 @@
       window._status = { show };
     })();
   </script>
-
+<!-- On-screen error/status overlay -->
+<div id="status" style="position:fixed;left:0;top:0;right:0;z-index:99999;
+     font:12px/1.35 monospace;background:rgba(0,0,0,.75);color:#fff;
+     padding:6px 8px;display:none;white-space:pre-wrap"></div>
+<script>
+  (function () {
+    const box = document.getElementById('status');
+    function show(msg){ box.style.display='block'; box.textContent += msg + "\n"; }
+    window._status = { show };
+    window.addEventListener('error', e => show('JS ERROR: ' + (e.message || e.filename)));
+    window.addEventListener('unhandledrejection', e => show('PROMISE REJECTION: ' + e.reason));
+  })();
+</script>
   <!-- Phaser game container (Phaser will inject a canvas in here) -->
   <div id="game"></div>
 
