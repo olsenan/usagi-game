@@ -1,4 +1,4 @@
-// game.js — ES5-safe, DOM-ready start + whole-page tap failsafe
+// game.js — ES5-safe; ultra-reliable Start (click/touchend/pointerup), status banner logging
 (function () {
   'use strict';
 
@@ -9,36 +9,26 @@
             touch:{left:false,right:false,jump:false,attack:false} };
 
   var BG_PATH='assets/background1.png';
-  var USAGI_PATH='assets/snes_usagi_sprite_sheet.png'; // 3x3, frame 256x384
+  var USAGI_PATH='assets/snes_usagi_sprite_sheet.png'; // 3x3 grid, 256x384
   var ENEMY_PATH='assets/enemy_sprites.png';
 
-  // Wire controls (called after DOM ready)
+  // ----- wire mobile buttons (after DOM ready) -----
   function wireTouchButtons(){
     var btns=document.querySelectorAll('#touchControls .ctl');
     for(var i=0;i<btns.length;i++){
       (function(btn){
         var key=btn.getAttribute('data-key');
-        function down(e){ if(e&&e.preventDefault)e.preventDefault();
-          if(key==='ArrowLeft')S.touch.left=true;
-          if(key==='ArrowRight')S.touch.right=true;
-          if(key==='Space')S.touch.jump=true;
-          if(key==='KeyA')S.touch.attack=true;
-        }
-        function up(e){ if(e&&e.preventDefault)e.preventDefault();
-          if(key==='ArrowLeft')S.touch.left=false;
-          if(key==='ArrowRight')S.touch.right=false;
-          if(key==='Space')S.touch.jump=false;
-          if(key==='KeyA')S.touch.attack=false;
-        }
-        btn.addEventListener('pointerdown',down,{passive:false});
-        btn.addEventListener('pointerup',up,{passive:false});
-        btn.addEventListener('pointercancel',up,{passive:false});
-        btn.addEventListener('pointerleave',up,{passive:false});
+        function down(){ if(key==='ArrowLeft')S.touch.left=true; if(key==='ArrowRight')S.touch.right=true; if(key==='Space')S.touch.jump=true; if(key==='KeyA')S.touch.attack=true; }
+        function up(){   if(key==='ArrowLeft')S.touch.left=false; if(key==='ArrowRight')S.touch.right=false; if(key==='Space')S.touch.jump=false; if(key==='KeyA')S.touch.attack=false; }
+        btn.addEventListener('pointerdown',down,false);
+        btn.addEventListener('pointerup',up,false);
+        btn.addEventListener('pointercancel',up,false);
+        btn.addEventListener('pointerleave',up,false);
       })(btns[i]);
     }
   }
 
-  // Start logic (arm on DOM ready)
+  // ----- Start arming (robust) -----
   function armStart(){
     var titleEl=document.getElementById('title');
     var startBtn=document.getElementById('startBtn');
@@ -54,30 +44,29 @@
         scene:{ preload:preload, create:create, update:update }
       });
       LOG('Boot: Phaser game created.');
-      disarm();
-    }
-    function on(e){ if(e&&e.preventDefault)e.preventDefault(); boot(); }
-    function disarm(){
-      try{ startBtn&&startBtn.removeEventListener('click',on); }catch(e){}
-      try{ startBtn&&startBtn.removeEventListener('touchstart',on); }catch(e){}
-      try{ titleEl&&titleEl.removeEventListener('click',on); }catch(e){}
-      try{ titleEl&&titleEl.removeEventListener('touchstart',on); }catch(e){}
-      try{ document.removeEventListener('pointerdown',on); }catch(e){}
     }
 
-    // Button + overlay + whole-page fallback
-    if(startBtn){ startBtn.addEventListener('click',on,{passive:true});
-                  startBtn.addEventListener('touchstart',on,{passive:false}); }
-    if(titleEl){ titleEl.addEventListener('click',on,{passive:true});
-                 titleEl.addEventListener('touchstart',on,{passive:false});
-                 titleEl.style.pointerEvents='auto'; }
-    document.addEventListener('pointerdown',on,{passive:false});
-    document.addEventListener('keydown',function(e){ if(e&&e.key==='Enter') boot(); });
+    function addOnce(el, type){ try{ el && el.addEventListener(type, boot, { once:true }); }catch(e){ el && el.addEventListener(type, function handler(){ el.removeEventListener(type, handler); boot(); }); } }
 
-    LOG('Start armed — tap anywhere or press Start.');
+    // Button + overlay + whole document — use click/touchend/pointerup (no preventDefault)
+    addOnce(startBtn, 'click');
+    addOnce(startBtn, 'touchend');
+    addOnce(startBtn, 'pointerup');
+
+    addOnce(titleEl,  'click');
+    addOnce(titleEl,  'touchend');
+    addOnce(titleEl,  'pointerup');
+
+    addOnce(document, 'click');
+    addOnce(document, 'touchend');
+    addOnce(document, 'pointerup');
+
+    document.addEventListener('keydown', function(e){ if(e&&e.key==='Enter') boot(); }, false);
+
+    LOG('Start armed — tap/click anywhere on the title screen.');
   }
 
-  // Phaser scene
+  // ----- Phaser scene -----
   function preload(){
     LOG('Preload: queue assets…');
     this.load.image('bg', BG_PATH+'?v='+Date.now());
@@ -107,7 +96,7 @@
     S.player.play('idle');
 
     S.cursors=this.input.keyboard.createCursorKeys();
-    this.input.keyboard.on('keydown-SPACE',function(){ tryAttack(); });
+    this.input.keyboard.on('keydown-SPACE', function(){ tryAttack(); }, this);
 
     S.enemies=this.physics.add.group({ allowGravity:false });
     spawnEnemy(this);
@@ -157,7 +146,7 @@
     e.setVelocityX(-50 - Math.random()*40);
   }
 
-  // Arm everything after DOM is ready
+  // Arm after DOM is ready
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded', function(){ wireTouchButtons(); armStart(); });
   } else {
