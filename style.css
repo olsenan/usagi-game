@@ -1,18 +1,9 @@
-body {
-  margin: 0;
-  background: black;
-  color: white;
-  font-family: monospace;
-  text-align: center;
-}
-#title-screen {
-  position: absolute;
-  width: 100%;
-  top: 40%;
-}
-#gameCanvas {
-  display: none;
-  width: 100vw;
-  height: 100vh;
-  background: #444;
-}
+* { box-sizing: border-box; }
+html, body { margin:0; height:100%; background:#000; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+#game { display:block; margin:0 auto; image-rendering: pixelated; background:#000; }
+#title { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; background:linear-gradient(#101018, #050507); text-align:center; }
+#title h1 { margin:0; font-size: clamp(28px, 6vw, 48px); letter-spacing: 1px; }
+#title .hint { opacity:.85; font-size: clamp(14px, 3.5vw, 18px); }
+.mobile { display:none; }
+.desktop { display:block; }
+@media (pointer:coarse){ .mobile{display:block;} .desktop{display:none;} }
