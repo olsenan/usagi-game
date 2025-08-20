@@ -30,8 +30,8 @@
       var box=document.getElementById('status');
       function show(msg){ box.style.display='block'; box.textContent += msg + "\n"; }
       window._status={ show:show };
-      window.addEventListener('error',function(e){ show('JS ERROR: ' + (e.message||e.filename)); });
-      window.addEventListener('unhandledrejection',function(e){ show('PROMISE REJECTION: ' + e.reason); });
+      window.addEventListener('error',e=>show('JS ERROR: ' + (e.message||e.filename)));
+      window.addEventListener('unhandledrejection',e=>show('PROMISE REJECTION: ' + e.reason));
     })();
   </script>
 
@@ -41,17 +41,17 @@
   <!-- On-screen controls -->
   <div id="touchControls" aria-hidden="false">
     <div class="left-cluster">
-      <button class="ctl" data-key="ArrowLeft"  aria-label="Move Left"><img src="assets/ui_left.png" alt="Left"></button>
-      <button class="ctl" data-key="ArrowRight" aria-label="Move Right"><img src="assets/ui_right.png" alt="Right"></button>
+      <button class="ctl" data-key="ArrowLeft"  aria-label="Move Left"><img src="assets/ui_left.png" alt="Left"></img></button>
+      <button class="ctl" data-key="ArrowRight" aria-label="Move Right"><img src="assets/ui_right.png" alt="Right"></img></button>
     </div>
     <div class="right-cluster">
-      <button class="ctl" data-key="Space"      aria-label="Jump"><img src="assets/ui_jump.png" alt="Jump"></button>
-      <button class="ctl" data-key="KeyA"       aria-label="Attack"><img src="assets/ui_attack.png" alt="Attack"></button>
+      <button class="ctl" data-key="Space"      aria-label="Jump"><img src="assets/ui_jump.png" alt="Jump"></img></button>
+      <button class="ctl" data-key="KeyA"       aria-label="Attack"><img src="assets/ui_attack.png" alt="Attack"></img></button>
     </div>
   </div>
 
   <!-- Scripts LAST so DOM exists -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js"></script>
-  <script src="game.js?v=full1"></script>
+  <script src="game.js?v=sheet-or-image"></script>
 </body>
 </html>
