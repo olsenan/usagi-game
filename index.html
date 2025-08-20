@@ -4,12 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport"
         content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Usagi Yojimbo — Prototype</title>
+  <title>Usagi Yojimbo — Phaser Prototype</title>
   <link rel="stylesheet" href="style.css" />
-  <link rel="manifest" href="manifest.json" />
 </head>
 <body>
-  <!-- Fullscreen overlay for title -->
+  <!-- Title Screen -->
   <div id="title">
     <h1>Usagi Yojimbo</h1>
     <p class="hint desktop">Press ENTER to Start</p>
@@ -17,21 +16,25 @@
     <button id="startBtn" aria-label="Start Game">Start</button>
   </div>
 
-  <!-- Fullscreen canvas -->
-  <canvas id="game" aria-label="Usagi Yojimbo game canvas"></canvas>
+  <!-- Phaser game container -->
+  <div id="game"></div>
 
-  <!-- On-screen controls (mobile only) -->
+  <!-- Controls (mobile only, optional) -->
   <div id="touchControls" aria-hidden="true">
     <div class="left-cluster">
-      <button class="ctl" data-key="ArrowLeft"  aria-label="Move Left">◀</button>
+      <button class="ctl" data-key="ArrowLeft" aria-label="Move Left">◀</button>
       <button class="ctl" data-key="ArrowRight" aria-label="Move Right">▶</button>
     </div>
     <div class="right-cluster">
-      <button class="ctl" data-key="Space"      aria-label="Jump">⭡</button>
-      <button class="ctl" data-key="KeyA"       aria-label="Attack">⚔</button>
+      <button class="ctl" data-key="Space" aria-label="Jump">⭡</button>
+      <button class="ctl" data-key="KeyA" aria-label="Attack">⚔</button>
     </div>
   </div>
 
+  <!-- Phaser 3 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js"></script>
+
+  <!-- Our game logic -->
   <script src="game.js"></script>
 </body>
 </html>
