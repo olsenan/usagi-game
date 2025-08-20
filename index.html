@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport"
         content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Usagi Yojimbo — Phaser Prototype</title>
+  <title>Usagi Yojimbo — Phaser</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -16,22 +16,25 @@
     <button id="startBtn" aria-label="Start Game">Start</button>
   </div>
 
-  <!-- Phaser game container -->
+  <!-- On-screen error/status overlay -->
+  <div id="status" style="position:fixed;left:0;top:0;right:0;z-index:99999;
+       font:12px/1.35 monospace;background:rgba(0,0,0,.7);color:#fff;
+       padding:6px 8px;display:none;white-space:pre-wrap"></div>
+  <script>
+    // Global error -> visible banner on page (works on Android)
+    (function(){
+      const box = document.getElementById('status');
+      function show(msg){ box.style.display='block'; box.textContent += msg + "\n"; }
+      window.addEventListener('error', e => show('JS ERROR: ' + (e.message || e.filename)));
+      window.addEventListener('unhandledrejection', e => show('PROMISE REJECTION: ' + e.reason));
+      window._status = { show };
+    })();
+  </script>
+
+  <!-- Phaser game container (Phaser will inject a canvas in here) -->
   <div id="game"></div>
 
-  <!-- Controls (mobile only, optional) -->
-  <div id="touchControls" aria-hidden="true">
-    <div class="left-cluster">
-      <button class="ctl" data-key="ArrowLeft" aria-label="Move Left">◀</button>
-      <button class="ctl" data-key="ArrowRight" aria-label="Move Right">▶</button>
-    </div>
-    <div class="right-cluster">
-      <button class="ctl" data-key="Space" aria-label="Jump">⭡</button>
-      <button class="ctl" data-key="KeyA" aria-label="Attack">⚔</button>
-    </div>
-  </div>
-
-  <!-- Phaser 3 CDN -->
+  <!-- Phaser 3 CDN (must be before game.js) -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js"></script>
 
   <!-- Our game logic -->
