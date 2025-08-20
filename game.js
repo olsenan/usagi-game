@@ -1,22 +1,28 @@
-// game.js — Auto-crop + pad Usagi sprites (3x3), pixel-perfect render
+// game.js — Auto-crop + pad Usagi sprites, pixel-perfect, uses first 9 frames
 (function () {
   'use strict';
 
   const BG_PATH    = 'assets/background1.png';
-  const USAGI_RAW  = 'assets/usagi_snes_sheet.png'; // your 3x3 SNES sheet
+  const USAGI_RAW  = 'assets/usagi_snes_sheet.png'; // your uploaded black-bg sheet
   const ENEMY_PATH = 'assets/enemy_sprites.png';
 
-  // Logical frame size we want for gameplay (uniform, bottom-aligned)
+  // Desired uniform frame size (what Phaser will index)
   const FRAME_W = 256;
   const FRAME_H = 384;
-  const COLS = 3, ROWS = 3;
 
-  // Transparent gutters to eliminate bleeding
-  const SPACING = 2;
-  const MARGIN  = 2;
+  // Grid guess for the raw sheet (first 9 cells are used)
+  const RAW_COLS = 3;
+  const RAW_ROWS = 4;   // we’ll only use the first 3×3 cells
 
-  // Display scale: integer factor keeps pixels crisp (256×384 -> 64×96)
+  // Transparent gutters to eliminate neighbor bleeding
+  const SPACING = 3;
+  const MARGIN  = 3;
+
+  // Display scale: integer factor keeps pixels crisp (256×384 → 64×96)
   const SCALE = 0.25;
+
+  // How different a pixel must be from background to be “foreground”
+  const COLOR_TOL = 18;   // works well for black/near-black backgrounds
 
   const S = {
     game:null, player:null, cursors:null,
@@ -25,97 +31,106 @@
     canAttack:true
   };
 
-  // -------------------- UTIL: build padded sheet by auto-cropping --------------------
+  // ---------- Build a padded, bottom-centered, uniform sheet from a raw grid ----------
   function buildPaddedSheet(scene, rawKey, outKey){
     const tex = scene.textures.get(rawKey);
     const srcImg = tex.getSourceImage(); // HTMLImageElement
 
-    // Draw raw sheet onto a canvas so we can read pixels
+    // Draw raw sheet onto a canvas to read pixels
+    const rawW = srcImg.width, rawH = srcImg.height;
+    const cellW = Math.floor(rawW / RAW_COLS);
+    const cellH = Math.floor(rawH / RAW_ROWS);
+
     const srcCvs = document.createElement('canvas');
-    srcCvs.width = srcImg.width; srcCvs.height = srcImg.height;
+    srcCvs.width = rawW; srcCvs.height = rawH;
     const sctx = srcCvs.getContext('2d', { willReadFrequently: true });
+    sctx.imageSmoothingEnabled = false;
     sctx.drawImage(srcImg, 0, 0);
 
-    const cellW = Math.floor(srcImg.width / COLS);
-    const cellH = Math.floor(srcImg.height / ROWS);
-
-    // Helper: average background color from the 4 corners of the whole sheet
+    // Average the corner colors to determine background (handles black/purple/etc.)
     function avgBg(){
       const pts = [
-        [2,2], [cellW-3,2], [srcImg.width-3,2], [2,cellH-3],
-        [srcImg.width-3,cellH-3], [2,srcImg.height-3],
-        [srcImg.width-3,srcImg.height-3], [cellW-3,srcImg.height-3]
+        [2,2],
+        [rawW-3,2],
+        [2,rawH-3],
+        [rawW-3,rawH-3],
       ];
       let r=0,g=0,b=0,n=0;
-      pts.forEach(([x,y])=>{
+      for(const [x,y] of pts){
         const d = sctx.getImageData(x,y,1,1).data; r+=d[0]; g+=d[1]; b+=d[2]; n++;
-      });
+      }
       return [r/n, g/n, b/n];
     }
     const [bgR,bgG,bgB] = avgBg();
     const dist = (r,g,b)=>Math.hypot(r-bgR,g-bgG,b-bgB);
 
-    // Destination padded canvas
-    const padW = COLS*FRAME_W + (COLS-1)*SPACING + 2*MARGIN;
-    const padH = ROWS*FRAME_H + (ROWS-1)*SPACING + 2*MARGIN;
+    // Destination padded canvas (we’ll only place first 9 frames)
+    const OUT_COLS = 3, OUT_ROWS = 3, OUT_FRAMES = 9;
+    const padW = OUT_COLS*FRAME_W + (OUT_COLS-1)*SPACING + 2*MARGIN;
+    const padH = OUT_ROWS*FRAME_H + (OUT_ROWS-1)*SPACING + 2*MARGIN;
     const outCvs = document.createElement('canvas');
     outCvs.width = padW; outCvs.height = padH;
     const octx = outCvs.getContext('2d');
+    octx.imageSmoothingEnabled = false;
 
-    // Scan each cell, find non-bg bounding box, bottom-center it into FRAME_W×FRAME_H
-    for(let r=0; r<ROWS; r++){
-      for(let c=0; c<COLS; c++){
-        const sx0 = c*cellW, sy0 = r*cellH;
-        const imgData = sctx.getImageData(sx0, sy0, cellW, cellH);
+    // Copy/crop first 3×3 cells → bottom-center into uniform slots
+    let outIndex = 0;
+    for(let r=0; r<OUT_ROWS; r++){
+      for(let c=0; c<OUT_COLS; c++){
+        const srcCellX = c*cellW, srcCellY = r*cellH;
+        const imgData = sctx.getImageData(srcCellX, srcCellY, cellW, cellH);
         const data = imgData.data;
 
-        // Find bounds of non-background pixels
         let minX=cellW, minY=cellH, maxX=-1, maxY=-1;
         for(let y=0; y<cellH; y++){
           for(let x=0; x<cellW; x++){
             const i = (y*cellW + x)*4;
             const R = data[i], G = data[i+1], B = data[i+2], A = data[i+3];
-            // Consider a pixel foreground if it's opaque-ish and not "close" to bg color
-            if (A>10 && dist(R,G,B) > 28){
+            // foreground if opaque-ish and not near the bg color
+            if (A>16 && dist(R,G,B) > COLOR_TOL){
               if(x<minX) minX=x; if(x>maxX) maxX=x;
               if(y<minY) minY=y; if(y>maxY) maxY=y;
             }
           }
         }
-        // Fallback if we didn't find anything (shouldn't happen)
-        if (maxX < minX || maxY < minY){ minX=0; minY=0; maxX=cellW-1; maxY=cellH-1; }
+        if (maxX < minX || maxY < minY){
+          // fallback: take the whole cell
+          minX = 0; minY = 0; maxX = cellW-1; maxY = cellH-1;
+        }
 
         const cropW = maxX-minX+1;
         const cropH = maxY-minY+1;
+        const srcX = srcCellX + minX;
+        const srcY = srcCellY + minY;
 
-        // Source rect in the raw sheet
-        const srcX = sx0 + minX;
-        const srcY = sy0 + minY;
-
-        // Dest slot origin
+        // Destination slot origin
         const dx0 = MARGIN + c*(FRAME_W + SPACING);
         const dy0 = MARGIN + r*(FRAME_H + SPACING);
 
-        // Bottom-center placement within the slot, with a tiny foot margin
+        // Bottom-center placement with a small foot margin so feet touch ground
         const foot = 4;
         const dx = dx0 + Math.floor((FRAME_W - cropW)/2);
         const dy = dy0 + (FRAME_H - cropH) - foot;
 
         octx.drawImage(srcCvs, srcX, srcY, cropW, cropH, dx, dy, cropW, cropH);
+
+        outIndex++;
+        if (outIndex >= OUT_FRAMES) break;
       }
+      if (outIndex >= 9) break;
     }
 
-    // Register texture as a spritesheet with spacing/margin
-    scene.textures.addSpriteSheet(outKey, outCvs, {
+    // Register as a spritesheet with spacing/margin
+    scene.textures.addSpriteSheet('usagi_pad', outCvs, {
       frameWidth: FRAME_W,
       frameHeight: FRAME_H,
       margin: MARGIN,
       spacing: SPACING
     });
-    scene.textures.get(outKey)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    scene.textures.get('usagi_pad')?.setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
 
-  // -------------------- UI / boot --------------------
+  // -------------------- UI wiring --------------------
   function wireTouchButtons(){
     const btns = document.querySelectorAll('#touchControls .ctl');
     btns.forEach(btn=>{
@@ -153,7 +168,7 @@
   // -------------------- Phaser lifecycle --------------------
   function preload(){
     this.load.image('bg', BG_PATH);
-    this.load.image('usagi_raw', USAGI_RAW); // load as image; we repack into a padded sheet
+    this.load.image('usagi_raw', USAGI_RAW); // load as image; we repack to padded sheet
     this.load.spritesheet('enemies', ENEMY_PATH, { frameWidth: 64, frameHeight: 64 });
   }
 
@@ -162,7 +177,7 @@
 
     this.add.image(0,0,'bg').setOrigin(0).setDisplaySize(w,h);
 
-    // Build padded, uniform spritesheet → 'usagi_pad'
+    // Build padded spritesheet 'usagi_pad'
     buildPaddedSheet(this, 'usagi_raw', 'usagi_pad');
 
     // Ground
@@ -171,7 +186,7 @@
     this.physics.add.existing(ground, true);
     S.ground = ground;
 
-    // Animations (frames 0..8)
+    // Animations from the first 9 frames (0..8)
     this.anims.create({ key:'idle',   frames:[{ key:'usagi_pad', frame:1 }], frameRate:1, repeat:-1 });
     this.anims.create({ key:'walk',   frames:this.anims.generateFrameNumbers('usagi_pad',{start:0,end:2}), frameRate:10, repeat:-1 });
     this.anims.create({ key:'attack', frames:this.anims.generateFrameNumbers('usagi_pad',{start:3,end:5}), frameRate:14, repeat:0 });
@@ -182,7 +197,7 @@
       .setCollideWorldBounds(true)
       .setScale(SCALE);
 
-    // Physics body (tight, feet on ground)
+    // Physics body (tight, feet aligned)
     const hitW_src = 56, hitH_src = 88;
     const bodyW = Math.round(hitW_src / SCALE);
     const bodyH = Math.round(hitH_src / SCALE);
@@ -205,7 +220,7 @@
     S.cursors = this.input.keyboard.createCursorKeys();
     this.input.keyboard.on('keydown-SPACE', ()=>tryAttack(), this);
 
-    // Attack hitbox
+    // Attack sensor
     S.attackHit = this.add.rectangle(0,0, 56, 44, 0xff0000, 0);
     this.physics.add.existing(S.attackHit, false);
     S.attackHit.body.setAllowGravity(false);
