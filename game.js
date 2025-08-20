@@ -1,28 +1,28 @@
-// game.js — Usagi Yojimbo prototype (mobile friendly + touch controls + resilient loader)
+// game.js — diagnostic build (verifies assets + mobile controls)
 'use strict';
 
-// ---------- Canvas: fit to screen (no scrolling, crisp pixels) ----------
+// ---------- Canvas: fit to screen ----------
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
 
 function fitCanvas() {
   const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
-  const cssW = cvs.clientWidth;   // 100vw from CSS
-  const cssH = cvs.clientHeight;  // 100vh from CSS
+  const cssW = cvs.clientWidth;
+  const cssH = cvs.clientHeight;
   cvs.width  = Math.floor(cssW * dpr);
   cvs.height = Math.floor(cssH * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS pixels
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 fitCanvas();
 addEventListener('resize', fitCanvas);
 addEventListener('orientationchange', () => setTimeout(fitCanvas, 100));
 
-// Prevent accidental page scroll / zoom during touch controls
+// Prevent touch scroll/zoom
 ['touchmove','gesturestart'].forEach(ev =>
   document.addEventListener(ev, e => e.preventDefault(), { passive:false })
 );
 
-// ---------- Title screen ----------
+// ---------- Title ----------
 const titleEl = document.getElementById('title');
 document.getElementById('startBtn').addEventListener('click', start);
 document.addEventListener('keydown', e => { if (e.key === 'Enter') start(); });
@@ -35,12 +35,12 @@ function start() {
   initGame();
 }
 
-// ---------- Touch controls emulate keyboard ----------
-const keys = {}; // unified key state (physical + virtual)
+// ---------- Touch controls ----------
+const keys = {};
 document.addEventListener('keydown', e => keys[e.code || e.key] = true);
 document.addEventListener('keyup',   e => keys[e.code || e.key] = false);
 for (const b of document.querySelectorAll('#touchControls .ctl')) {
-  const code = b.dataset.key; // "ArrowLeft", "ArrowRight", "Space", "KeyA"
+  const code = b.dataset.key;
   const press   = e => { e.preventDefault(); keys[code] = true;  };
   const release = e => { e.preventDefault(); keys[code] = false; };
   b.addEventListener('pointerdown', press,   { passive:false });
@@ -49,7 +49,7 @@ for (const b of document.querySelectorAll('#touchControls .ctl')) {
   b.addEventListener('pointerleave', release,{ passive:false });
 }
 
-// ---------- Asset paths (CASE-SENSITIVE) ----------
+// ---------- Expected asset paths (CASE-SENSITIVE) ----------
 const ASSET_PATHS = {
   bg1:   'assets/background1.png',
   bg2:   'assets/background2.png',
@@ -59,33 +59,68 @@ const ASSET_PATHS = {
   ninja: 'assets/enemy_ninja.png',
 };
 
-// Resilient loader: returns { loaded, missing }
-async function loadImages(paths) {
-  const loaded = {}, missing = [];
-  await Promise.all(Object.entries(paths).map(([key, src]) => new Promise(res => {
-    const im = new Image();
-    im.onload  = () => { loaded[key] = im; res(); };
-    im.onerror = () => { missing.push(src); res(); };
-    // Cache-bust to avoid GitHub Pages serving old files
-    im.src = src + '?v=' + Date.now();
-  })));
-  return { loaded, missing };
+// ---------- Diagnostic loader ----------
+async function verifyUrl(url) {
+  try {
+    // HEAD often works, but some CDNs block it; fall back to GET if needed
+    let r = await fetch(url + '?v=' + Date.now(), { method: 'HEAD', cache: 'no-store' });
+    if (!r.ok || (r.status >= 400)) {
+      r = await fetch(url + '?v=' + Date.now(), { method: 'GET', cache: 'no-store' });
+    }
+    return r.ok;
+  } catch {
+    return false;
+  }
 }
 
-// ---------- Simple prototype gameplay ----------
-let img = {};
-let missing = []; // list of missing asset URLs (shown on screen)
+async function loadImage(url) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => (im.naturalWidth > 0 ? res(im) : rej(new Error('0 size')));
+    im.onerror = rej;
+    im.src = url + '?v=' + Date.now(); // cache-bust
+  });
+}
 
+async function loadAssets(paths) {
+  const report = {}; // key -> {url, fetchOk, imgOk}
+  const images = {};
+  const failures = [];
+
+  for (const [key, url] of Object.entries(paths)) {
+    const entry = { url, fetchOk: false, imgOk: false };
+    report[key] = entry;
+
+    entry.fetchOk = await verifyUrl(url);
+    if (entry.fetchOk) {
+      try {
+        images[key] = await loadImage(url);
+        entry.imgOk = true;
+      } catch {
+        failures.push(url);
+      }
+    } else {
+      failures.push(url);
+    }
+  }
+
+  return { images, failures, report };
+}
+
+// ---------- Game state ----------
+let img = {};
+let missing = [];
+let diagReport = {};
 const player = { x: 120, y: 0, w: 64, h: 64, speed: 4, vy: 0, onGround: false };
 const groundY = () => Math.floor(cvs.clientHeight - 72);
-
 const enemies = [];
 let spawnTimer = 0;
 
 async function initGame() {
-  // Load art; continue even if some assets are missing
-  const { loaded, missing: miss } = await loadImages(ASSET_PATHS);
-  img = loaded; missing = miss;
+  const { images, failures, report } = await loadAssets(ASSET_PATHS);
+  img = images;
+  missing = failures;
+  diagReport = report;
 
   player.y = groundY();
   last = performance.now();
@@ -96,24 +131,22 @@ let last = 0;
 function loop(ts) {
   const dt = Math.min(0.05, (ts - last) / 1000);
   last = ts;
-
   update(dt);
   render();
-
   if (state === 'play') requestAnimationFrame(loop);
 }
 
 function update(dt) {
-  // Move left/right
+  // Move
   let move = 0;
   if (keys['ArrowRight']) move += 1;
   if (keys['ArrowLeft'])  move -= 1;
   player.x += move * player.speed;
   player.x = Math.max(0, Math.min(cvs.clientWidth - player.w, player.x));
 
-  // Jump (Space)
+  // Jump
   if (keys['Space'] && player.onGround) {
-    player.vy = -720;              // jump impulse
+    player.vy = -720;
     player.onGround = false;
   }
 
@@ -123,7 +156,7 @@ function update(dt) {
   player.y += player.vy * dt;
   if (player.y >= gY) { player.y = gY; player.vy = 0; player.onGround = true; }
 
-  // Spawn simple enemies
+  // Enemies
   spawnTimer += dt;
   if (spawnTimer > 2) { spawnEnemy(); spawnTimer = 0; }
   enemies.forEach(e => e.x += e.vx);
@@ -131,7 +164,7 @@ function update(dt) {
     if (enemies[i].x < -enemies[i].w) enemies.splice(i, 1);
   }
 
-  // Attack (KeyA) – quick knockback for now
+  // Attack (KeyA)
   if (keys['KeyA']) {
     enemies.forEach(e => {
       const dx = Math.abs((e.x + e.w/2) - (player.x + player.w/2));
@@ -147,11 +180,11 @@ function spawnEnemy() {
 }
 
 function render() {
-  // Background (use bg1 for now)
+  // Background
   if (img.bg1) ctx.drawImage(img.bg1, 0, 0, cvs.clientWidth, cvs.clientHeight);
   else { ctx.fillStyle = '#0a2150'; ctx.fillRect(0, 0, cvs.clientWidth, cvs.clientHeight); }
 
-  // Subtle ground line
+  // Ground guide
   ctx.fillStyle = 'rgba(255,255,255,0.06)';
   ctx.fillRect(0, groundY()+64, cvs.clientWidth, 4);
 
@@ -166,14 +199,26 @@ function render() {
     else { ctx.fillStyle = '#ef4444'; ctx.fillRect(e.x, e.y - e.h, e.w, e.h); }
   });
 
-  // On-screen diagnostics: list any missing asset paths
-  if (missing.length) {
-    const pad = 8, w = Math.min(480, cvs.clientWidth - 16), h = 28 + 16*missing.length;
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillRect(pad, pad, w, h);
-    ctx.fillStyle = '#ff6b6b';
-    ctx.font = '12px system-ui';
-    ctx.fillText('Missing assets (check file names & paths):', pad+8, pad+20);
-    missing.forEach((m, i) => ctx.fillText(m, pad+8, pad+40 + i*16));
-  }
+  // Diagnostic panel (always visible for now)
+  drawDiagnostics();
+}
+
+function drawDiagnostics() {
+  const pad = 8;
+  const keys = Object.keys(ASSET_PATHS);
+  const h = 28 + 18 * keys.length;
+  const w = Math.min(520, cvs.clientWidth - 16);
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  ctx.fillRect(pad, pad, w, h);
+  ctx.fillStyle = '#fff';
+  ctx.font = '12px system-ui';
+  ctx.fillText('Asset check (fetch + image decode):', pad + 8, pad + 20);
+
+  keys.forEach((k, i) => {
+    const r = diagReport[k] || {};
+    const y = pad + 40 + i * 18;
+    const status = r.imgOk ? 'OK' : (r.fetchOk ? 'Decode FAILED' : 'Fetch FAILED');
+    ctx.fillStyle = r.imgOk ? '#10b981' : r.fetchOk ? '#f59e0b' : '#ef4444';
+    ctx.fillText(`${k} → ${r.url} [${status}]`, pad + 8, y);
+  });
 }
