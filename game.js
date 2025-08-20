@@ -1,18 +1,25 @@
-// game.js — ES5-safe; ultra-reliable Start (click/touchend/pointerup), status banner logging
+// game.js — ES5-safe, input-driven anims, ground + collisions, attack hitbox
 (function () {
   'use strict';
 
-  function LOG(m){ try{ if(window._status&&_status.show){ _status.show(m); } }catch(e){} try{ console.log(m); }catch(e){} }
+  // ---------- debug logger (uses #status from index.html) ----------
+  function LOG(m){ try{ if(window._status && _status.show){ _status.show(m); } }catch(e){} try{ console.log(m); }catch(e){} }
   if(!window.Phaser){ LOG('Phaser not loaded — ensure CDN <script> is before game.js'); }
 
-  var S = { game:null,cursors:null,player:null,enemies:null,canAttack:true,
-            touch:{left:false,right:false,jump:false,attack:false} };
+  // ---------- state ----------
+  var S = {
+    game:null, cursors:null, player:null, enemies:null,
+    canAttack:true,
+    touch:{ left:false, right:false, jump:false, attack:false },
+    ground:null, groundY:0, attackHit:null
+  };
 
-  var BG_PATH='assets/background1.png';
-  var USAGI_PATH='assets/snes_usagi_sprite_sheet.png'; // 3x3 grid, 256x384
-  var ENEMY_PATH='assets/enemy_sprites.png';
+  // ---------- assets ----------
+  var BG_PATH    = 'assets/background1.png';
+  var USAGI_PATH = 'assets/snes_usagi_sprite_sheet.png'; // 3x3 grid, 256x384 per frame (PNG with alpha)
+  var ENEMY_PATH = 'assets/enemy_sprites.png';
 
-  // ----- wire mobile buttons (after DOM ready) -----
+  // ---------- wire on-screen buttons ----------
   function wireTouchButtons(){
     var btns=document.querySelectorAll('#touchControls .ctl');
     for(var i=0;i<btns.length;i++){
@@ -28,7 +35,7 @@
     }
   }
 
-  // ----- Start arming (robust) -----
+  // ---------- Start (robust) ----------
   function armStart(){
     var titleEl=document.getElementById('title');
     var startBtn=document.getElementById('startBtn');
@@ -45,28 +52,20 @@
       });
       LOG('Boot: Phaser game created.');
     }
+    function addOnce(el,type){
+      try{ el && el.addEventListener(type, boot, { once:true }); }
+      catch(e){ el && el.addEventListener(type, function h(){ el.removeEventListener(type,h); boot(); }); }
+    }
 
-    function addOnce(el, type){ try{ el && el.addEventListener(type, boot, { once:true }); }catch(e){ el && el.addEventListener(type, function handler(){ el.removeEventListener(type, handler); boot(); }); } }
-
-    // Button + overlay + whole document — use click/touchend/pointerup (no preventDefault)
-    addOnce(startBtn, 'click');
-    addOnce(startBtn, 'touchend');
-    addOnce(startBtn, 'pointerup');
-
-    addOnce(titleEl,  'click');
-    addOnce(titleEl,  'touchend');
-    addOnce(titleEl,  'pointerup');
-
-    addOnce(document, 'click');
-    addOnce(document, 'touchend');
-    addOnce(document, 'pointerup');
-
+    addOnce(startBtn,'click'); addOnce(startBtn,'touchend'); addOnce(startBtn,'pointerup');
+    addOnce(titleEl,'click');  addOnce(titleEl,'touchend');  addOnce(titleEl,'pointerup');
+    addOnce(document,'click'); addOnce(document,'touchend'); addOnce(document,'pointerup');
     document.addEventListener('keydown', function(e){ if(e&&e.key==='Enter') boot(); }, false);
 
-    LOG('Start armed — tap/click anywhere on the title screen.');
+    LOG('Start armed — tap anywhere or press Start.');
   }
 
-  // ----- Phaser scene -----
+  // ---------- Phaser: preload / create / update ----------
   function preload(){
     LOG('Preload: queue assets…');
     this.load.image('bg', BG_PATH+'?v='+Date.now());
@@ -78,75 +77,142 @@
   }
 
   function create(){
-    var w=this.scale.width,h=this.scale.height;
+    var w=this.scale.width, h=this.scale.height;
 
+    // Background
     if(this.textures.exists('bg')){
       var bg=this.add.image(0,0,'bg').setOrigin(0); bg.setDisplaySize(w,h);
       this.scale.on('resize',function(sz){ var W=sz.width,H=sz.height; try{this.cameras.resize(W,H);}catch(e){} bg.setDisplaySize(W,H); },this);
     }
 
-    // 3x3 frames: 0..8
-    this.anims.create({ key:'idle',   frames:this.anims.generateFrameNumbers('usagi',{start:0,end:1}), frameRate:4,  repeat:-1 });
+    // --- Invisible ground (static body) ---
+    // Place a bit higher so UI doesn’t overlap feet on small phones.
+    S.groundY = h - 110;
+    var groundRect = this.add.rectangle(0, S.groundY, w*2, 24, 0x000000, 0); // invisible bar
+    this.physics.add.existing(groundRect, true); // static
+    S.ground = groundRect;
+
+    // --- Animations (3x3 grid: 0..8) ---
+    // Idle = single frame (choose the cleanest pose)
+    this.anims.create({ key:'idle',   frames:[{ key:'usagi', frame:1 }], frameRate:1,  repeat:-1 });
     this.anims.create({ key:'walk',   frames:this.anims.generateFrameNumbers('usagi',{start:0,end:2}), frameRate:10, repeat:-1 });
     this.anims.create({ key:'attack', frames:this.anims.generateFrameNumbers('usagi',{start:3,end:5}), frameRate:14, repeat:0  });
     this.anims.create({ key:'heavy',  frames:this.anims.generateFrameNumbers('usagi',{start:6,end:8}), frameRate:12, repeat:0  });
 
-    S.player=this.physics.add.sprite(100,h-150,'usagi',0).setCollideWorldBounds(true);
+    // --- Player ---
+    S.player = this.physics.add.sprite(120, S.groundY, 'usagi', 1).setCollideWorldBounds(true);
+    // Scale big frames (256x384) down to ~128px tall
     var targetH=128, scale=targetH/384; S.player.setScale(scale);
-    S.player.play('idle');
 
+    // Tighten hitbox (feet-aligned)
+    var bodyW=32, bodyH=64;
+    S.player.body.setSize(bodyW, bodyH);
+    // Offsets are in texture-space (unscaled)
+    var offX=((256*scale)-bodyW)/2/scale; // center horizontally
+    var offY=((384*scale)-bodyH-4)/scale; // 4px above bottom
+    S.player.body.setOffset(offX, offY);
+
+    S.player.setOrigin(0.5,1); // origin at feet
+    S.player.play('idle');
+    S.player.isAttacking=false;
+
+    // Ground collision
+    this.physics.add.collider(S.player, S.ground);
+
+    // Return to idle after attacks
+    this.anims.on('complete', function(anim, spr){
+      if(spr===S.player && (anim.key==='attack' || anim.key==='heavy')){
+        S.player.isAttacking=false;
+        S.player.play('idle');
+      }
+    }, this);
+
+    // Input
     S.cursors=this.input.keyboard.createCursorKeys();
     this.input.keyboard.on('keydown-SPACE', function(){ tryAttack(); }, this);
 
-    S.enemies=this.physics.add.group({ allowGravity:false });
+    // --- Attack hitbox (invisible sensor) ---
+    S.attackHit = this.add.rectangle(0,0, 50, 40, 0xff0000, 0);
+    this.physics.add.existing(S.attackHit, false);
+    S.attackHit.body.setAllowGravity(false);
+    S.attackHit.body.setEnable(false);
+
+    // Overlap: attack sensor vs enemies
+    this.physics.add.overlap(S.attackHit, function(){ return S.enemies; }, function(hit, enemy){
+      enemy.setVelocityX(-200);
+      enemy.setTint(0xffaaaa);
+      setTimeout(function(){ if(enemy && enemy.clearTint) enemy.clearTint(); }, 200);
+    }, null, this);
+
+    // --- Enemies group ---
+    S.enemies = this.physics.add.group();
+    this.physics.add.collider(S.enemies, S.ground);
     spawnEnemy(this);
     this.time.addEvent({ delay:1800, loop:true, callback:function(){ spawnEnemy(this); }, callbackScope:this });
   }
 
   function update(){
     var p=S.player; if(!p||!p.body) return;
+
     var left=(S.cursors&&S.cursors.left.isDown)||S.touch.left;
     var right=(S.cursors&&S.cursors.right.isDown)||S.touch.right;
     var jump=(S.cursors&&S.cursors.up.isDown)||S.touch.jump;
     var atk=S.touch.attack;
 
-    p.setVelocityX(0);
-    if(left){ p.setVelocityX(-180); p.flipX=true; p.play('walk',true); }
-    else if(right){ p.setVelocityX(180); p.flipX=false; p.play('walk',true); }
-    else { p.play('idle',true); }
+    // Horizontal move + animate only when moving (and not mid-attack)
+    if(!p.isAttacking){
+      p.setVelocityX(0);
+      if(left){ p.setVelocityX(-180); p.flipX=true;  p.play('walk', true); }
+      else if(right){ p.setVelocityX(180); p.flipX=false; p.play('walk', true); }
+      else { p.play('idle', true); }
+    }
 
-    if(jump && p.body.touching.down) p.setVelocityY(-420);
-    if(atk) tryAttack();
+    // Jump (grounded only)
+    if(jump && p.body.blocked.down){ p.setVelocityY(-420); }
 
+    // Trigger attack
+    if(atk){ tryAttack(); }
+
+    // Cleanup enemies that leave screen
     S.enemies.children.iterate(function(e){ if(e && e.x < -e.width) e.destroy(); });
   }
 
+  // ---------- attack with hitbox ----------
   function tryAttack(){
     if(!S.canAttack || !S.player) return;
     S.canAttack=false;
-    S.player.play('attack',true);
-    setTimeout(function(){ S.canAttack=true; },250);
+    S.player.isAttacking=true;
+    S.player.play('attack', true);
+    setTimeout(function(){ S.canAttack=true; }, 250);
 
-    S.enemies.children.iterate(function(e){
-      if(!e) return;
-      var dx=Math.abs(e.x-S.player.x), dy=Math.abs(e.y-S.player.y);
-      if(dx<70 && dy<40){ e.setVelocityX(-120); e.setTint(0xffaaaa); setTimeout(function(){ if(e&&e.clearTint)e.clearTint(); },200); }
-    });
+    // Position the sensor in front of Usagi for ~200ms
+    var dir = S.player.flipX ? -1 : 1;
+    var px  = S.player.x + (34 * dir);
+    var py  = S.player.y - 28; // chest height
+    S.attackHit.setPosition(px, py);
+    if(S.attackHit.body){ S.attackHit.body.setEnable(true); }
+    setTimeout(function(){ if(S.attackHit && S.attackHit.body) S.attackHit.body.setEnable(false); }, 200);
   }
 
+  // ---------- enemy spawn (shares same baseline) ----------
   function spawnEnemy(scene){
-    var w=scene.scale.width,h=scene.scale.height,e;
-    if(scene.textures.exists('enemies')) e=S.enemies.create(w+32,h-150,'enemies');
-    else{
-      var g=scene.add.graphics(); g.fillStyle(0xff00ff,1).fillRect(0,0,64,64);
-      var key='enemy_fallback_'+Math.random().toString(36).slice(2,8);
-      g.generateTexture(key,64,64); g.destroy();
-      e=S.enemies.create(w+32,h-150,key);
-    }
-    e.setVelocityX(-50 - Math.random()*40);
+    var w=scene.scale.width;
+    var e=scene.textures.exists('enemies')
+      ? S.enemies.create(w+40, S.groundY, 'enemies', 0)
+      : (function(){
+          var g=scene.add.graphics(); g.fillStyle(0xff00ff,1).fillRect(0,0,64,64);
+          var key='enemy_fallback_'+Math.random().toString(36).slice(2,8);
+          g.generateTexture(key,64,64); g.destroy();
+          return S.enemies.create(w+40, S.groundY, key);
+        })();
+
+    e.setOrigin(0.5,1);              // feet on baseline
+    e.setVelocityX(-60 - Math.random()*50);
+    e.setCollideWorldBounds(false);
+    e.body.setAllowGravity(true);
   }
 
-  // Arm after DOM is ready
+  // ---------- boot after DOM ready ----------
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded', function(){ wireTouchButtons(); armStart(); });
   } else {
