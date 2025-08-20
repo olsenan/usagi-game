@@ -1,33 +1,35 @@
-// game.js — Use your SNES sheet, auto-remove purple bg, slice 3x3 frames (256x384)
+// game.js — Auto-detect frame size from your 3x3 sheet, remove purple bg, slice correctly
 (function () {
   'use strict';
 
   function LOG(m){ try{ if(window._status&&_status.show){ _status.show(m); } }catch(e){} try{ console.log(m); }catch(e){} }
   if(!window.Phaser){ LOG('Phaser not loaded — ensure CDN <script> is before game.js'); }
 
-  // ==== CONFIG: make sure this filename matches your repo ====
-  // Example: 'assets/snes_usagi_sprite_sheet.png'  (rename here if yours differs)
+  // === CONFIG ===
+  // Make sure this path matches your SNES Usagi sheet (the nice purple-background PNG in /assets)
   var USAGI_SOURCE = 'assets/snes_usagi_sprite_sheet.png';
 
-  // Your sheet layout (matches the SNES art you showed: 3 columns × 3 rows)
-  var FRAME_W = 256, FRAME_H = 384;
-  var COLUMNS = 3, ROWS = 3;
+  // Your sheet layout
+  var COLS = 3, ROWS = 3;
 
-  // If your sheet has borders/gaps, set these (most don't)
-  var SHEET_MARGIN = 0;
-  var SHEET_SPACING = 0;
+  // If your sheet has a border or spacing, we’ll still be fine (we chroma-key to transparent),
+  // but you can tune these if needed:
+  var SHEET_MARGIN = 0;   // px
+  var SHEET_SPACING = 0;  // px
 
-  // Chroma-key target (dark purple). We'll remove anything near this color.
-  // You can tweak these values if needed.
-  var KEY_R = 22, KEY_G = 18, KEY_B = 30, KEY_TOL = 34; // ± tolerance
+  // Chroma-key (remove purple bg)
+  var KEY_R = 22, KEY_G = 18, KEY_B = 30, KEY_TOL = 38; // tweak if needed
 
+  // Other assets
   var BG_PATH    = 'assets/background1.png';
   var ENEMY_PATH = 'assets/enemy_sprites.png';
 
+  // Runtime state
   var S = {
     game:null,cursors:null,player:null,enemies:null,canAttack:true,
     touch:{left:false,right:false,jump:false,attack:false},
-    ground:null, groundY:0, attackHit:null
+    ground:null, groundY:0, attackHit:null,
+    frameW:256, frameH:384 // will be overwritten by detection
   };
 
   // ---------- mobile buttons ----------
@@ -79,10 +81,9 @@
     LOG('Preload: queue assets…');
     this.load.image('bg', BG_PATH+'?v='+Date.now());
 
-    // Load Usagi sheet as a plain image first (with purple bg)
+    // Load Usagi sheet as a raw image (we’ll process it in create)
     this.load.image('usagi_raw', USAGI_SOURCE+'?v='+Date.now());
 
-    // Enemies (simple 64×64 cells)
     this.load.spritesheet('enemies', ENEMY_PATH+'?v='+Date.now(), { frameWidth:64, frameHeight:64 });
 
     this.load.on('filecomplete', key => LOG('Loaded: '+key));
@@ -90,36 +91,42 @@
     this.load.on('complete',   ()  => LOG('All assets loaded'));
   }
 
-  // ---------- convert purple to transparent & register spritesheet ----------
-  function createSpritesheetFromImage(scene, rawKey, outKey){
+  // ---------- convert purple to transparent, detect frame size, register sheet ----------
+  function buildUsagiSheet(scene, rawKey, outKey){
     var rawTex = scene.textures.get(rawKey);
     if(!rawTex){ LOG('ERROR: raw texture missing: '+rawKey); return false; }
-
     var src = rawTex.getSourceImage();
-    var canvasTex = scene.textures.createCanvas(outKey+'_canvas', src.width, src.height);
+
+    var SHEET_W = src.width, SHEET_H = src.height;
+    // Auto-detect frame sizes from the actual image
+    var frameW = Math.round(SHEET_W / COLS);
+    var frameH = Math.round(SHEET_H / ROWS);
+    S.frameW = frameW; S.frameH = frameH;
+    LOG('Usagi sheet size: '+SHEET_W+'×'+SHEET_H+' → frames '+frameW+'×'+frameH+' ('+COLS+'×'+ROWS+')');
+
+    // Draw to a canvas and chroma-key the purple background
+    var canvasTex = scene.textures.createCanvas(outKey+'_canvas', SHEET_W, SHEET_H);
     var ctx = canvasTex.getContext();
     ctx.drawImage(src, 0, 0);
 
-    var imgData = ctx.getImageData(0, 0, src.width, src.height);
+    var imgData = ctx.getImageData(0, 0, SHEET_W, SHEET_H);
     var data = imgData.data;
-
     for (var i=0; i<data.length; i+=4){
       var r=data[i], g=data[i+1], b=data[i+2];
       if (Math.abs(r-KEY_R)<=KEY_TOL && Math.abs(g-KEY_G)<=KEY_TOL && Math.abs(b-KEY_B)<=KEY_TOL){
-        data[i+3] = 0; // make transparent
+        data[i+3] = 0; // transparent
       }
     }
     ctx.putImageData(imgData, 0, 0);
     canvasTex.refresh();
 
-    // Register a proper spritesheet from the processed canvas
-    // (Phaser accepts a canvas/image source here)
+    // Register spritesheet using computed frame sizes
     scene.textures.addSpriteSheet(outKey, canvasTex.getSourceImage(), {
-      frameWidth: FRAME_W, frameHeight: FRAME_H,
+      frameWidth: frameW, frameHeight: frameH,
       margin: SHEET_MARGIN, spacing: SHEET_SPACING
     });
 
-    // We no longer need the raw or canvas intermediates in the texture manager
+    // Clean up raw/canvas textures (optional)
     scene.textures.remove(rawKey);
     scene.textures.remove(outKey+'_canvas');
 
@@ -137,9 +144,9 @@
       this.scale.on('resize',function(sz){ var W=sz.width,H=sz.height; try{this.cameras.resize(W,H);}catch(e){} bg.setDisplaySize(W,H); },this);
     }
 
-    // Create processed spritesheet from raw image
-    var ok = createSpritesheetFromImage(this, 'usagi_raw', 'usagi');
-    if(!ok){ LOG('ERROR: could not build Usagi sheet — check file path and dimensions.'); }
+    // Build sheet from source image with auto slicing
+    var ok = buildUsagiSheet(this, 'usagi_raw', 'usagi');
+    if(!ok){ LOG('ERROR: could not build Usagi sheet — check file path and that the image is 3×3.'); }
 
     // Ground (invisible static)
     S.groundY = h - 110;
@@ -156,13 +163,13 @@
 
     // Player
     S.player = this.physics.add.sprite(120, S.groundY, 'usagi', 1).setCollideWorldBounds(true);
-    var targetH=128, scale=targetH/FRAME_H; S.player.setScale(scale);
+    var targetH=128, scale=targetH/Math.max(1,S.frameH); S.player.setScale(scale);
 
     // Tight body & offset so feet sit on baseline
     var bodyW=36, bodyH=68;
     S.player.body.setSize(bodyW, bodyH);
-    var offX=((FRAME_W*scale)-bodyW)/2/scale;
-    var offY=((FRAME_H*scale)-bodyH-4)/scale;
+    var offX=((S.frameW*scale)-bodyW)/2/scale;
+    var offY=((S.frameH*scale)-bodyH-4)/scale;
     S.player.body.setOffset(offX, offY);
 
     S.player.setOrigin(0.5,1);
