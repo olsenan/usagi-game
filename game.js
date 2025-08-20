@@ -1,3 +1,7 @@
+if (!window.Phaser) {
+  alert('Phaser not loaded — check the <script> CDN tag in index.html');
+}
+
 // game.js — Phaser version
 'use strict';
 
