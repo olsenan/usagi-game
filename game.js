@@ -1,38 +1,53 @@
-// game.js — Production-safe Phaser build (ES5-friendly)
+// game.js — Production-safe Phaser build (ES5)
+// - Namespaced state to avoid "already declared" errors
 // - Auto-slices Usagi image into frames (common layouts + fallback)
 // - Mobile buttons wired
-// - Visible logs to on-page banner (no modern syntax that breaks older Android)
+// - Visible logs to on-page banner
 
 (function(){
   'use strict';
 
-  // ---------- lightweight logger ----------
+  // ---------- simple logger ----------
   function LOG(m){
     try { if (window._status && _status.show) { _status.show(m); } } catch (e) {}
     try { console.log(m); } catch (e) {}
   }
 
-  // ---------- environment checks ----------
-  if (!window.Phaser) { LOG('Phaser not loaded — make sure the CDN <script> is before game.js'); return; }
-  if (!document.getElementById('game')) { LOG('Missing <div id="game"></div> container'); }
+  // ---------- env checks ----------
+  if (!window.Phaser) { LOG('Phaser not loaded — ensure CDN script is before game.js'); return; }
+  if (!document.getElementById('game')) { LOG('Missing <div id="game"></div>'); }
 
-  // ---------- touch controls wiring ----------
-  var touch = { left:false, right:false, jump:false, attack:false };
+  // ---------- global-ish game state (namespaced) ----------
+  var gameState = {
+    game: null,
+    player: null,
+    cursors: null,
+    enemies: null,
+    canAttack: true,
+    touch: { left:false, right:false, jump:false, attack:false }
+  };
+
+  // ---------- paths (case-sensitive) ----------
+  var BG_PATH     = 'assets/background1.png';
+  var USAGI_IMG   = 'assets/snes_usagi_sprite_sheet.png'; // your multi-frame PNG
+  var ENEMY_SHEET = 'assets/enemy_sprites.png';
+
+  // ---------- wire touch controls ----------
   var btns = document.querySelectorAll('#touchControls .ctl');
   for (var i=0; i<btns.length; i++){
     (function(btn){
       var key = btn.getAttribute('data-key');
       function down(e){ if(e && e.preventDefault) e.preventDefault();
-        if(key==='ArrowLeft')  touch.left  = true;
-        if(key==='ArrowRight') touch.right = true;
-        if(key==='Space')      touch.jump  = true;
-        if(key==='KeyA')       touch.attack= true;
+        if(key==='ArrowLeft')  gameState.touch.left  = true;
+        if(key==='ArrowRight') gameState.touch.right = true;
+        if(key==='Space')      gameState.touch.jump  = true;
+        if(key==='KeyA')       gameState.touch.attack= true;
       }
       function up(e){ if(e && e.preventDefault) e.preventDefault();
-        if(key==='ArrowLeft')  touch.left  = false;
-        if(key==='ArrowRight') touch.right = false;
-        if(key==='Space')      touch.jump  = false;
-        if(key==='KeyA')       touch.attack= false;
+        if(key==='ArrowLeft')  gameState.touch.left  = false;
+        if(key==='ArrowRight') gameState.touch.right = false;
+        if(key==='Space')      gameState.touch.jump  = false;
+        if(key==='KeyA')       gameState.touch.attack= false;
       }
       btn.addEventListener('pointerdown', down, {passive:false});
       btn.addEventListener('pointerup',   up,   {passive:false});
@@ -44,11 +59,10 @@
   // ---------- boot wiring ----------
   var titleEl = document.getElementById('title');
   var startBtn = document.getElementById('startBtn');
-  var game = null;
 
   function boot(){
-    if (game) return;
-    game = new Phaser.Game({
+    if (gameState.game) return;
+    gameState.game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: 'game',
       width: window.innerWidth,
@@ -65,14 +79,6 @@
     startBtn.addEventListener('touchstart', function(e){ if(e&&e.preventDefault) e.preventDefault(); boot(); }, {passive:false});
   }
   document.addEventListener('keydown', function(e){ if (e && e.key === 'Enter') boot(); });
-
-  // ---------- paths (case-sensitive!) ----------
-  var BG_PATH     = 'assets/background1.png';
-  var USAGI_IMG   = 'assets/snes_usagi_sprite_sheet.png'; // your uploaded PNG (any common layout)
-  var ENEMY_SHEET = 'assets/enemy_sprites.png';
-
-  // ---------- scene state ----------
-  var player, cursors, enemies, canAttack = true;
 
   // ---------- preload ----------
   function preload(){
@@ -104,14 +110,14 @@
       }, this);
     }
 
-    // ---- convert Usagi image -> spritesheet frames ----
+    // convert Usagi image -> frames
     var usagiReady = false;
     if (this.textures.exists('usagi_i')) {
       var srcImg = this.textures.get('usagi_i').getSourceImage();
       var TW = srcImg.width, TH = srcImg.height;
       LOG('Usagi: source size ' + TW + 'x' + TH);
 
-      // Try common SNES-like layouts (frameW, frameH, cols, rows)
+      // Try common layouts (frameW, frameH, cols, rows)
       var candidates = [
         [64,96,5,1],[64,96,6,1],[64,96,8,1],[64,96,4,2],[64,96,5,2],
         [64,64,6,1],[64,64,8,1],[64,64,5,1],[64,64,4,2]
@@ -126,13 +132,14 @@
       }
       if (!chosen){
         // Fallback: assume single row, 5 columns
-        chosen = { fw: Math.floor(TW/5), fh: TH, cols: Math.max(1, Math.floor(TW/Math.max(1,Math.floor(TW/5)))), rows: 1 };
+        var fw2 = Math.max(1, Math.floor(TW/5));
+        chosen = { fw: fw2, fh: TH, cols: Math.max(1, Math.floor(TW/fw2)), rows: 1 };
         LOG('Usagi: fallback layout -> ' + chosen.fw + 'x' + chosen.fh + ', ' + chosen.cols + 'x' + chosen.rows);
       } else {
         LOG('Usagi: detected layout -> ' + chosen.fw + 'x' + chosen.fh + ', ' + chosen.cols + 'x' + chosen.rows);
       }
 
-      // Create canvas texture and register frames
+      // Create texture and register frames
       var texKey = 'usagi';
       var canvasTex = this.textures.createCanvas(texKey, TW, TH);
       var canvas = canvasTex.getSourceImage();
@@ -160,21 +167,21 @@
       LOG('JS ERROR: usagi image failed to decode (no source)');
     }
 
-    // player (fallback if sprite not ready)
-    player = this.physics.add.sprite(100, h - 150, usagiReady ? 'usagi' : null).setCollideWorldBounds(true);
+    // player (fallback box if not ready)
+    gameState.player = this.physics.add.sprite(100, h - 150, usagiReady ? 'usagi' : null)
+                           .setCollideWorldBounds(true);
     if (!usagiReady){
       var g = this.add.graphics();
       g.lineStyle(2, 0x00ff00, 1).strokeRect(0,0,64,96);
       var fbKey = 'usagi_fallback';
       g.generateTexture(fbKey, 64,96);
       g.destroy();
-      player.setTexture(fbKey);
+      gameState.player.setTexture(fbKey);
     }
 
-    // animations (built from however many frames we have)
+    // animations
     if (usagiReady){
       var names = this.textures.get('usagi').getFrameNames();
-      // sort numerically
       names.sort(function(a,b){ return parseInt(a,10) - parseInt(b,10); });
       var total = names.length;
 
@@ -190,53 +197,58 @@
         return arr;
       }
 
-      this.anims.create({ key:'idle',   frames: seq(0, idleEnd),    frameRate: 4,  repeat: -1 });
+      this.anims.create({ key:'idle',   frames: seq(0, idleEnd),         frameRate: 4,  repeat: -1 });
       this.anims.create({ key:'walk',   frames: seq(walkStart, walkEnd), frameRate: 10, repeat: -1 });
       this.anims.create({ key:'attack', frames: seq(atkStart, atkEnd),   frameRate: 14, repeat: 0 });
 
-      player.play('idle');
+      gameState.player.play('idle');
     }
 
     // input
-    cursors = this.input.keyboard.createCursorKeys();
+    gameState.cursors = this.input.keyboard.createCursorKeys();
     this.input.keyboard.on('keydown-SPACE', function(){ tryAttack(); });
 
     // enemies
-    enemies = this.physics.add.group({ allowGravity:false });
+    gameState.enemies = this.physics.add.group({ allowGravity:false });
     spawnEnemy(this);
-    this.time.addEvent({ delay: 1800, loop:true, callback: function(){ spawnEnemy(this); }, callbackScope: this });
+    this.time.addEvent({
+      delay: 1800,
+      loop: true,
+      callback: function(){ spawnEnemy(this); },
+      callbackScope: this
+    });
   }
 
   // ---------- update ----------
   function update(){
-    if (!player || !player.body) return;
+    var p = gameState.player;
+    if (!p || !p.body) return;
 
-    var left   = (cursors && cursors.left.isDown)  || touch.left;
-    var right  = (cursors && cursors.right.isDown) || touch.right;
-    var jump   = (cursors && cursors.up.isDown)    || touch.jump;
-    var attack = touch.attack;
+    var left   = (gameState.cursors && gameState.cursors.left.isDown)  || gameState.touch.left;
+    var right  = (gameState.cursors && gameState.cursors.right.isDown) || gameState.touch.right;
+    var jump   = (gameState.cursors && gameState.cursors.up.isDown)    || gameState.touch.jump;
+    var attack = gameState.touch.attack;
 
-    player.setVelocityX(0);
-    if (left)  { player.setVelocityX(-180); player.flipX = true;  if (player.anims) player.play('walk', true); }
-    else if (right){ player.setVelocityX(180); player.flipX = false; if (player.anims) player.play('walk', true); }
-    else { if (player.anims) player.play('idle', true); }
+    p.setVelocityX(0);
+    if (left){  p.setVelocityX(-180); p.flipX = true;  if (p.anims) p.play('walk', true); }
+    else if (right){ p.setVelocityX(180);  p.flipX = false; if (p.anims) p.play('walk', true); }
+    else { if (p.anims) p.play('idle', true); }
 
-    if (jump && player.body.touching.down) player.setVelocityY(-420);
+    if (jump && p.body.touching.down) p.setVelocityY(-420);
     if (attack) tryAttack();
-
-    enemies.children.iterate(function(e){ if (e && e.x < -e.width) e.destroy(); });
+    gameState.enemies.children.iterate(function(e){ if (e && e.x < -e.width) e.destroy(); });
   }
 
   // ---------- attack ----------
   function tryAttack(){
-    if (!canAttack || !player) return;
-    canAttack = false;
-    if (player.anims) player.play('attack', true);
-    setTimeout(function(){ canAttack = true; }, 250);
+    if (!gameState.canAttack || !gameState.player) return;
+    gameState.canAttack = false;
+    if (gameState.player.anims) gameState.player.play('attack', true);
+    setTimeout(function(){ gameState.canAttack = true; }, 250);
 
-    enemies.children.iterate(function(e){
+    gameState.enemies.children.iterate(function(e){
       if (!e) return;
-      var dx = Math.abs(e.x - player.x), dy = Math.abs(e.y - player.y);
+      var dx = Math.abs(e.x - gameState.player.x), dy = Math.abs(e.y - gameState.player.y);
       if (dx < 70 && dy < 40){ e.setVelocityX(-120); e.setTint(0xffaaaa); setTimeout(function(){ if(e && e.clearTint) e.clearTint(); }, 200); }
     });
   }
@@ -246,13 +258,13 @@
     var w = scene.scale.width, h = scene.scale.height;
     var e;
     if (scene.textures.exists('enemies')) {
-      e = enemies.create(w + 32, h - 150, 'enemies');
+      e = gameState.enemies.create(w + 32, h - 150, 'enemies');
     } else {
-      // visible fallback
+      // magenta fallback so you still see enemies
       var g = scene.add.graphics(); g.fillStyle(0xff00ff,1).fillRect(0,0,64,64);
       var key = 'enemy_fallback_' + Math.random().toString(36).slice(2,8);
-      g.generateTexture(key, 64,64); g.destroy();
-      e = enemies.create(w + 32, h - 150, key);
+      g.generateTexture(key,64,64); g.destroy();
+      e = gameState.enemies.create(w + 32, h - 150, key);
     }
     e.setVelocityX(-50 - Math.random()*40);
     e.setCollideWorldBounds(false);
