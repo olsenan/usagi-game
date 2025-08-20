@@ -2,55 +2,47 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <title>Usagi Yojimbo — Phaser</title>
-
-  <!-- If you have a style.css, keep it. Optional inline tweaks to ensure mobile buttons show. -->
   <link rel="stylesheet" href="style.css" />
   <style>
-    /* Ensure title sits above game and accepts taps */
-    #title { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
-             background:rgba(0,0,0,.6); color:#fff; z-index:9999; text-align:center; }
-    #title .hint { opacity:.85; margin:.25rem 0; }
-    #startBtn { padding:.6rem 1rem; font-size:1rem; }
+    /* Title overlay */
+    #title{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;color:#fff;z-index:9999;text-align:center}
+    #title .hint{opacity:.85;margin:.25rem 0}
+    #startBtn{padding:.7rem 1.25rem;border-radius:14px;font-size:1.05rem;background:#16a34a;color:#fff;border:0}
 
-    /* Make touch controls visible on mobile by default */
-    #touchControls{
-      position:fixed; left:12px; right:12px; bottom:12px;
-      display:flex; justify-content:space-between; gap:12px;
-      z-index: 9999; pointer-events:auto;
-    }
-    #touchControls .ctl{ font-size:24px; padding:14px 18px; border-radius:14px; }
+    /* Mobile controls visible (can sit under title until game starts) */
+    #touchControls{position:fixed;left:12px;right:12px;bottom:12px;display:flex;justify-content:space-between;gap:12px;z-index:2000}
+    #touchControls .ctl{font-size:24px;padding:14px 18px;border-radius:14px}
+
+    /* Status/debug banner */
+    #status{position:fixed;left:0;top:0;right:0;z-index:10000;font:12px/1.35 monospace;background:rgba(0,0,0,.75);color:#fff;padding:6px 8px;display:none;white-space:pre-wrap}
   </style>
 </head>
 <body>
   <!-- Title Screen -->
   <div id="title">
     <h1>Usagi Yojimbo</h1>
-    <p class="hint desktop">Press ENTER to Start</p>
-    <p class="hint mobile">Tap to Start</p>
+    <p class="hint">Tap anywhere or press Start</p>
     <button id="startBtn" aria-label="Start Game">Start</button>
   </div>
 
-  <!-- On-screen error/status overlay (for mobile debugging) -->
-  <div id="status" style="position:fixed;left:0;top:0;right:0;z-index:99999;
-       font:12px/1.35 monospace;background:rgba(0,0,0,.75);color:#fff;
-       padding:6px 8px;display:none;white-space:pre-wrap"></div>
+  <!-- Status / debug -->
+  <div id="status"></div>
   <script>
     (function () {
-      var box = document.getElementById('status');
+      var box=document.getElementById('status');
       function show(msg){ box.style.display='block'; box.textContent += msg + "\n"; }
-      window._status = { show: show };
-      window.addEventListener('error', function(e){ show('JS ERROR: ' + (e.message || e.filename)); });
-      window.addEventListener('unhandledrejection', function(e){ show('PROMISE REJECTION: ' + e.reason); });
+      window._status={ show:show };
+      window.addEventListener('error',function(e){ show('JS ERROR: ' + (e.message||e.filename)); });
+      window.addEventListener('unhandledrejection',function(e){ show('PROMISE REJECTION: ' + e.reason); });
     })();
   </script>
 
-  <!-- Phaser mounts a <canvas> into this container -->
+  <!-- Phaser mounts into this container -->
   <div id="game"></div>
 
-  <!-- On-screen controls (mobile) -->
+  <!-- On-screen controls -->
   <div id="touchControls" aria-hidden="false">
     <div class="left-cluster">
       <button class="ctl" data-key="ArrowLeft"  aria-label="Move Left">◀</button>
@@ -62,10 +54,8 @@
     </div>
   </div>
 
-  <!-- Phaser 3 CDN (must be before game.js) -->
+  <!-- IMPORTANT: scripts at the very end so DOM exists -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js"></script>
-
-  <!-- Our game logic (single reference only) -->
-  <script src="game.js?v=prod1"></script>
+  <script src="game.js?v=boot3"></script>
 </body>
 </html>
