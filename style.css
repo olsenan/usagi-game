@@ -84,3 +84,6 @@ html, body {
   .mobile{display:block;} .desktop{display:none;}
   #touchControls{display:block;}
 }
+/* Ensure title overlay receives taps and is on top */
+#title { z-index: 9999; pointer-events: auto; }
+#startBtn { pointer-events: auto; }
