@@ -20,6 +20,18 @@
   <!-- Fullscreen canvas -->
   <canvas id="game" aria-label="Usagi Yojimbo game canvas"></canvas>
 
+  <!-- On-screen controls (mobile only) -->
+  <div id="touchControls" aria-hidden="true">
+    <div class="left-cluster">
+      <button class="ctl" data-key="ArrowLeft"  aria-label="Move Left">◀</button>
+      <button class="ctl" data-key="ArrowRight" aria-label="Move Right">▶</button>
+    </div>
+    <div class="right-cluster">
+      <button class="ctl" data-key="Space"      aria-label="Jump">⭡</button>
+      <button class="ctl" data-key="KeyA"       aria-label="Attack">⚔</button>
+    </div>
+  </div>
+
   <script src="game.js"></script>
 </body>
 </html>
