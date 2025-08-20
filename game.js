@@ -1,32 +1,36 @@
-// game.js — Usagi SNES sheet: hard anti-bleed + bottom-center, mobile-safe
+// game.js — ground raised, extra foot clearance, anti-bleed spritesheet build
 (function () {
   'use strict';
 
+  // --- Paths ---------------------------------------------------------------
   const BG_PATH    = 'assets/background1.png';
-  const USAGI_RAW  = 'assets/usagi_snes_sheet.png'; // 3x4 black-bg sheet
+  const USAGI_RAW  = 'assets/usagi_snes_sheet.png'; // your 3x4 black-bg sheet
   const ENEMY_PATH = 'assets/enemy_sprites.png';
 
-  // Target uniform frame size (Phaser indexes these)
+  // --- Target uniform frame size for the rebuilt sheet ---------------------
   const FRAME_W = 256;
   const FRAME_H = 384;
 
-  // Raw grid (we use first 3x3 frames = 9)
+  // Raw grid of the uploaded sheet (we use first 3x3 = 9 frames)
   const RAW_COLS = 3;
   const RAW_ROWS = 4;
 
-  // Bigger transparent gutters to eliminate GPU bleeding
-  const SPACING = 12;   // between frames
-  const MARGIN  = 12;   // outer border
+  // Strong gutters (mobile GPU-safe)
+  const SPACING = 12;       // transparent pixels between frames
+  const MARGIN  = 12;       // transparent pixels around outside border
+  const COLOR_TOL = 32;     // stricter fg detection (reduces edge specks)
+  const BLEED_INSET = 2;    // draw each crop inset inside slot (top/btm)
 
-  // Stricter foreground detection (fewer dark edge specks)
-  const COLOR_TOL = 32;
+  // Raise ground so the player stands higher on screen (was ~h-110)
+  const GROUND_RAISE = 160; // bigger number = ground higher (further from bottom)
 
-  // Draw every crop slightly inset inside its slot to avoid sampling neighbors
-  const BLEED_INSET = 2;   // inset 2px on top & bottom inside each FRAME slot
+  // Extra foot space inside each frame so feet never clip
+  const FOOT_MARGIN = 10;
 
-  // Pixel display scale (keep integer for crisp pixels)
+  // Pixel scale (keep integer for crisp pixels)
   const SCALE = 0.25;
 
+  // --- State ---------------------------------------------------------------
   const S = {
     game:null, player:null, cursors:null,
     ground:null, groundY:0, enemies:null, attackHit:null,
@@ -34,6 +38,7 @@
     canAttack:true
   };
 
+  // --- Build padded, bottom-centered sheet from the raw 3x4 grid ----------
   function buildPaddedSheet(scene, rawKey, outKey){
     const tex = scene.textures.get(rawKey);
     const srcImg = tex.getSourceImage();
@@ -47,7 +52,7 @@
     sctx.imageSmoothingEnabled = false;
     sctx.drawImage(srcImg, 0, 0);
 
-    // Background color from corners
+    // Estimate bg color from corners (works for black bg too)
     function avgBg(){
       const pts = [[2,2],[rawW-3,2],[2,rawH-3],[rawW-3,rawH-3]];
       let r=0,g=0,b=0,n=0;
@@ -57,7 +62,6 @@
     const [bgR,bgG,bgB] = avgBg();
     const dist = (r,g,b)=>Math.hypot(r-bgR,g-bgG,b-bgB);
 
-    // Destination padded canvas for first 3x3 frames
     const OUT_COLS = 3, OUT_ROWS = 3, OUT_FRAMES = 9;
     const padW = OUT_COLS*FRAME_W + (OUT_COLS-1)*SPACING + 2*MARGIN;
     const padH = OUT_ROWS*FRAME_H + (OUT_ROWS-1)*SPACING + 2*MARGIN;
@@ -73,7 +77,7 @@
         const imgData = sctx.getImageData(sx0, sy0, cellW, cellH);
         const data = imgData.data;
 
-        // Crop bounds
+        // Crop bounds (skip pixels near bg color)
         let minX=cellW, minY=cellH, maxX=-1, maxY=-1;
         for(let y=0; y<cellH; y++){
           for(let x=0; x<cellW; x++){
@@ -89,16 +93,15 @@
         const cropW=maxX-minX+1, cropH=maxY-minY+1;
         const srcX=sx0+minX, srcY=sy0+minY;
 
-        // Slot origin
+        // Slot origin for this frame
         const dx0 = MARGIN + c*(FRAME_W + SPACING);
         const dy0 = MARGIN + r*(FRAME_H + SPACING);
 
-        // Bottom-center align; add BLEED_INSET top/bottom inside slot
-        const foot = 6; // slightly larger to avoid “feet clipping”
+        // Bottom-center align; leave FOOT_MARGIN room under feet
         const dx = dx0 + Math.floor((FRAME_W - cropW)/2);
-        const dy = dy0 + (FRAME_H - cropH) - foot;
+        const dy = dy0 + (FRAME_H - cropH) - FOOT_MARGIN;
 
-        // Draw with inset (prevents sampling of neighbors on some GPUs)
+        // Draw inset to avoid vertical neighbor sampling on some GPUs
         octx.drawImage(
           srcCvs, srcX, srcY, cropW, cropH,
           dx, dy + BLEED_INSET,
@@ -119,7 +122,7 @@
     scene.textures.get(outKey)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
 
-  // Touch controls
+  // --- UI wiring ------------------------------------------------------------
   function wireTouchButtons(){
     const btns = document.querySelectorAll('#touchControls .ctl');
     btns.forEach(btn=>{
@@ -156,7 +159,7 @@
     document.addEventListener('keydown',e=>{ if(e.key==='Enter') boot(); });
   }
 
-  // Phaser lifecycle
+  // --- Phaser lifecycle ------------------------------------------------------
   function preload(){
     this.load.image('bg', BG_PATH);
     this.load.image('usagi_raw', USAGI_RAW);
@@ -168,15 +171,16 @@
 
     this.add.image(0,0,'bg').setOrigin(0).setDisplaySize(w,h);
 
+    // Build anti-bleed padded sheet
     buildPaddedSheet(this, 'usagi_raw', 'usagi_pad');
 
-    // Ground
-    S.groundY = h - 110;
+    // Ground raised (further from bottom so feet are never on the bezel/controls)
+    S.groundY = h - GROUND_RAISE;
     const ground = this.add.rectangle(0, S.groundY, w*2, 24, 0x000000, 0);
     this.physics.add.existing(ground, true);
     S.ground = ground;
 
-    // Animations (use first 9 frames)
+    // Animations (first 9 frames)
     this.anims.create({ key:'idle',   frames:[{ key:'usagi_pad', frame:1 }], frameRate:1, repeat:-1 });
     this.anims.create({ key:'walk',   frames:this.anims.generateFrameNumbers('usagi_pad',{start:0,end:2}), frameRate:10, repeat:-1 });
     this.anims.create({ key:'attack', frames:this.anims.generateFrameNumbers('usagi_pad',{start:3,end:5}), frameRate:14, repeat:0 });
@@ -187,7 +191,7 @@
       .setCollideWorldBounds(true)
       .setScale(SCALE);
 
-    // Physics body (tight around torso; feet safe)
+    // Physics body (tight torso; feet safe above ground)
     const hitW_src = 56, hitH_src = 88;
     const bodyW = Math.round(hitW_src / SCALE);
     const bodyH = Math.round(hitH_src / SCALE);
@@ -195,9 +199,8 @@
 
     const displayW = FRAME_W * SCALE;
     const displayH = FRAME_H * SCALE;
-    const footMargin = 8; // more room so feet never clip ground
     const offX = Math.round((displayW - bodyW * SCALE) / 2 / SCALE);
-    const offY = Math.round((displayH - bodyH * SCALE - footMargin) / SCALE);
+    const offY = Math.round((displayH - bodyH * SCALE - FOOT_MARGIN) / SCALE);
     S.player.body.setOffset(offX, offY);
 
     this.physics.add.collider(S.player, S.ground);
@@ -271,9 +274,8 @@
     e.body.setAllowGravity(true);
   }
 
+  // --- Boot -----------------------------------------------------------------
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded', ()=>{ wireTouchButtons(); armStart(); });
-  } else {
-    wireTouchButtons(); armStart();
-  }
+  } else { wireTouchButtons(); armStart(); }
 })();
