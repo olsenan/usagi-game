@@ -1,4 +1,4 @@
-// game.js — Auto-detect frame size from your 3x3 sheet, remove purple bg, slice correctly
+// game.js — Auto-crop 3x3 sheet with purple bg, repack into tight grid, slice correctly
 (function () {
   'use strict';
 
@@ -6,30 +6,21 @@
   if(!window.Phaser){ LOG('Phaser not loaded — ensure CDN <script> is before game.js'); }
 
   // === CONFIG ===
-  // Make sure this path matches your SNES Usagi sheet (the nice purple-background PNG in /assets)
-  var USAGI_SOURCE = 'assets/snes_usagi_sprite_sheet.png';
-
-  // Your sheet layout
+  var USAGI_SOURCE = 'assets/snes_usagi_sprite_sheet.png'; // your SNES art (with purple bg)
   var COLS = 3, ROWS = 3;
 
-  // If your sheet has a border or spacing, we’ll still be fine (we chroma-key to transparent),
-  // but you can tune these if needed:
-  var SHEET_MARGIN = 0;   // px
-  var SHEET_SPACING = 0;  // px
-
-  // Chroma-key (remove purple bg)
-  var KEY_R = 22, KEY_G = 18, KEY_B = 30, KEY_TOL = 38; // tweak if needed
+  // Purple to key out (tweak if needed)
+  var KEY_R=22, KEY_G=18, KEY_B=30, KEY_TOL=38;
 
   // Other assets
   var BG_PATH    = 'assets/background1.png';
   var ENEMY_PATH = 'assets/enemy_sprites.png';
 
-  // Runtime state
   var S = {
     game:null,cursors:null,player:null,enemies:null,canAttack:true,
     touch:{left:false,right:false,jump:false,attack:false},
     ground:null, groundY:0, attackHit:null,
-    frameW:256, frameH:384 // will be overwritten by detection
+    frameW:128, frameH:128 // filled after repack
   };
 
   // ---------- mobile buttons ----------
@@ -80,10 +71,7 @@
   function preload(){
     LOG('Preload: queue assets…');
     this.load.image('bg', BG_PATH+'?v='+Date.now());
-
-    // Load Usagi sheet as a raw image (we’ll process it in create)
     this.load.image('usagi_raw', USAGI_SOURCE+'?v='+Date.now());
-
     this.load.spritesheet('enemies', ENEMY_PATH+'?v='+Date.now(), { frameWidth:64, frameHeight:64 });
 
     this.load.on('filecomplete', key => LOG('Loaded: '+key));
@@ -91,46 +79,98 @@
     this.load.on('complete',   ()  => LOG('All assets loaded'));
   }
 
-  // ---------- convert purple to transparent, detect frame size, register sheet ----------
-  function buildUsagiSheet(scene, rawKey, outKey){
-    var rawTex = scene.textures.get(rawKey);
+  // ---------- utility: chroma key test ----------
+  function isKey(r,g,b){
+    return (Math.abs(r-KEY_R)<=KEY_TOL &&
+            Math.abs(g-KEY_G)<=KEY_TOL &&
+            Math.abs(b-KEY_B)<=KEY_TOL);
+  }
+
+  // ---------- build tight spritesheet from raw image ----------
+  function buildTightSheet(scene, rawKey, outKey){
+    const rawTex = scene.textures.get(rawKey);
     if(!rawTex){ LOG('ERROR: raw texture missing: '+rawKey); return false; }
-    var src = rawTex.getSourceImage();
+    const src = rawTex.getSourceImage();
+    const SW = src.width, SH = src.height;
 
-    var SHEET_W = src.width, SHEET_H = src.height;
-    // Auto-detect frame sizes from the actual image
-    var frameW = Math.round(SHEET_W / COLS);
-    var frameH = Math.round(SHEET_H / ROWS);
-    S.frameW = frameW; S.frameH = frameH;
-    LOG('Usagi sheet size: '+SHEET_W+'×'+SHEET_H+' → frames '+frameW+'×'+frameH+' ('+COLS+'×'+ROWS+')');
+    // Draw raw -> canvas and remove purple
+    const srcCanvas = scene.textures.createCanvas(outKey+'_src', SW, SH);
+    const sctx = srcCanvas.getContext();
+    sctx.drawImage(src, 0, 0);
+    const img = sctx.getImageData(0,0,SW,SH);
+    const d = img.data;
+    for(let i=0;i<d.length;i+=4){
+      if(isKey(d[i],d[i+1],d[i+2])) d[i+3]=0;
+    }
+    sctx.putImageData(img,0,0);
+    srcCanvas.refresh();
 
-    // Draw to a canvas and chroma-key the purple background
-    var canvasTex = scene.textures.createCanvas(outKey+'_canvas', SHEET_W, SHEET_H);
-    var ctx = canvasTex.getContext();
-    ctx.drawImage(src, 0, 0);
+    // Split into COLS×ROWS cells, find tight bbox per cell
+    const cellW = Math.floor(SW / COLS);
+    const cellH = Math.floor(SH / ROWS);
+    const boxes = []; // {x,y,w,h}
+    let maxW=0, maxH=0;
 
-    var imgData = ctx.getImageData(0, 0, SHEET_W, SHEET_H);
-    var data = imgData.data;
-    for (var i=0; i<data.length; i+=4){
-      var r=data[i], g=data[i+1], b=data[i+2];
-      if (Math.abs(r-KEY_R)<=KEY_TOL && Math.abs(g-KEY_G)<=KEY_TOL && Math.abs(b-KEY_B)<=KEY_TOL){
-        data[i+3] = 0; // transparent
+    function cellBBox(cx, cy){
+      const x0 = cx*cellW, y0 = cy*cellH;
+      const w = (cx===COLS-1) ? (SW - x0) : cellW;
+      const h = (cy===ROWS-1) ? (SH - y0) : cellH;
+      const data = sctx.getImageData(x0,y0,w,h);
+      const dd = data.data;
+      let minX=w, minY=h, maxX=-1, maxY=-1;
+
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          const k = (y*w + x)*4;
+          if(dd[k+3]>10){ // any visible pixel
+            if(x<minX)minX=x; if(y<minY)minY=y;
+            if(x>maxX)maxX=x; if(y>maxY)maxY=y;
+          }
+        }
+      }
+      if(maxX<0 || maxY<0){
+        // empty cell (unlikely) — fallback to whole cell
+        return {x:x0,y:y0,w:w,h:h};
+      }
+      const bx = x0+minX, by = y0+minY, bw = (maxX-minX+1), bh = (maxY-minY+1);
+      return {x:bx,y:by,w:bw,h:bh};
+    }
+
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        const b = cellBBox(c,r);
+        boxes.push(b);
+        if(b.w>maxW)maxW=b.w;
+        if(b.h>maxH)maxH=b.h;
       }
     }
-    ctx.putImageData(imgData, 0, 0);
-    canvasTex.refresh();
 
-    // Register spritesheet using computed frame sizes
-    scene.textures.addSpriteSheet(outKey, canvasTex.getSourceImage(), {
-      frameWidth: frameW, frameHeight: frameH,
-      margin: SHEET_MARGIN, spacing: SHEET_SPACING
+    // Create packed canvas with uniform frames (maxW×maxH), bottom-aligned, centered
+    const packedW = maxW*COLS, packedH = maxH*ROWS;
+    const packed = scene.textures.createCanvas(outKey+'_packed', packedW, packedH);
+    const pctx = packed.getContext();
+    pctx.clearRect(0,0,packedW,packedH);
+
+    boxes.forEach((b, i)=>{
+      const r = Math.floor(i/COLS), c = i%COLS;
+      const dx = c*maxW + Math.floor((maxW - b.w)/2);       // center horizontally
+      const dy = r*maxH + (maxH - b.h);                      // bottom align
+      pctx.drawImage(srcCanvas.getSourceImage(), b.x, b.y, b.w, b.h, dx, dy, b.w, b.h);
+    });
+    packed.refresh();
+
+    // Register spritesheet with tight frame size
+    scene.textures.addSpriteSheet(outKey, packed.getSourceImage(), {
+      frameWidth: maxW, frameHeight: maxH, margin: 0, spacing: 0
     });
 
-    // Clean up raw/canvas textures (optional)
+    // Cleanup intermediates
     scene.textures.remove(rawKey);
-    scene.textures.remove(outKey+'_canvas');
+    scene.textures.remove(outKey+'_src');
+    scene.textures.remove(outKey+'_packed');
 
-    LOG('Usagi: purple background removed; spritesheet registered.');
+    S.frameW=maxW; S.frameH=maxH;
+    LOG(`Usagi repacked: frames ${maxW}×${maxH} (sheet ${packedW}×${packedH})`);
     return true;
   }
 
@@ -144,18 +184,18 @@
       this.scale.on('resize',function(sz){ var W=sz.width,H=sz.height; try{this.cameras.resize(W,H);}catch(e){} bg.setDisplaySize(W,H); },this);
     }
 
-    // Build sheet from source image with auto slicing
-    var ok = buildUsagiSheet(this, 'usagi_raw', 'usagi');
-    if(!ok){ LOG('ERROR: could not build Usagi sheet — check file path and that the image is 3×3.'); }
+    // Build tight spritesheet from the raw 3x3 image
+    if(!buildTightSheet(this, 'usagi_raw', 'usagi')){
+      LOG('ERROR: could not build Usagi sheet — check file path.'); return;
+    }
 
-    // Ground (invisible static)
+    // Ground
     S.groundY = h - 110;
     var groundRect = this.add.rectangle(0, S.groundY, w*2, 24, 0x000000, 0);
     this.physics.add.existing(groundRect, true);
     S.ground = groundRect;
 
-    // Animations — 3×3 grid frames 0..8
-    // Row 1: 0,1,2 (idle/walk), Row 2: 3,4,5 (attack), Row 3: 6,7,8 (heavy)
+    // Animations — still 0..8 in reading order
     this.anims.create({ key:'idle',   frames:[{ key:'usagi', frame:1 }], frameRate:1,  repeat:-1 });
     this.anims.create({ key:'walk',   frames:this.anims.generateFrameNumbers('usagi',{start:0,end:2}), frameRate:10, repeat:-1 });
     this.anims.create({ key:'attack', frames:this.anims.generateFrameNumbers('usagi',{start:3,end:5}), frameRate:14, repeat:0  });
@@ -172,23 +212,21 @@
     var offY=((S.frameH*scale)-bodyH-4)/scale;
     S.player.body.setOffset(offX, offY);
 
-    S.player.setOrigin(0.5,1);
-    S.player.play('idle');
+    S.player.setOrigin(0.5,1).play('idle');
     S.player.isAttacking=false;
 
     this.physics.add.collider(S.player, S.ground);
 
     // Return to idle after attacks
-    this.anims.on('complete', function(anim, spr){
+    this.anims.on('complete', (anim, spr)=>{
       if(spr===S.player && (anim.key==='attack' || anim.key==='heavy')){
-        S.player.isAttacking=false;
-        S.player.play('idle');
+        S.player.isAttacking=false; S.player.play('idle');
       }
-    }, this);
+    });
 
     // Input
     S.cursors=this.input.keyboard.createCursorKeys();
-    this.input.keyboard.on('keydown-SPACE', function(){ tryAttack(); }, this);
+    this.input.keyboard.on('keydown-SPACE', ()=>tryAttack(), this);
 
     // Attack hitbox (sensor)
     S.attackHit = this.add.rectangle(0,0, 56, 44, 0xff0000, 0);
@@ -199,22 +237,17 @@
     // Enemies
     S.enemies = this.physics.add.group();
     this.physics.add.collider(S.enemies, S.ground);
-
-    // Overlap: attack sensor vs enemies
-    this.physics.add.overlap(S.attackHit, function(){ return S.enemies; }, function(hit, enemy){
-      enemy.setVelocityX(-220);
-      enemy.setTint(0xffaaaa);
-      setTimeout(function(){ if(enemy && enemy.clearTint) enemy.clearTint(); }, 220);
-    }, null, this);
+    this.physics.add.overlap(S.attackHit, ()=>S.enemies, (hit, enemy)=>{
+      enemy.setVelocityX(-220); enemy.setTint(0xffaaaa);
+      setTimeout(()=>enemy && enemy.clearTint && enemy.clearTint(), 220);
+    });
 
     spawnEnemy(this);
-    this.time.addEvent({ delay:1700, loop:true, callback:function(){ spawnEnemy(this); }, callbackScope:this });
+    this.time.addEvent({ delay:1700, loop:true, callback:()=>spawnEnemy(this) });
   }
 
-  // ---------- Phaser: update ----------
   function update(){
     var p=S.player; if(!p||!p.body) return;
-
     var left =(S.cursors&&S.cursors.left.isDown)||S.touch.left;
     var right=(S.cursors&&S.cursors.right.isDown)||S.touch.right;
     var jump =(S.cursors&&S.cursors.up.isDown)||S.touch.jump;
@@ -230,26 +263,22 @@
     if(jump && p.body.blocked.down){ p.setVelocityY(-420); }
     if(atk){ tryAttack(); }
 
-    S.enemies.children.iterate(function(e){ if(e && e.x < -e.width) e.destroy(); });
+    S.enemies.children.iterate(e=>{ if(e && e.x < -e.width) e.destroy(); });
   }
 
-  // ---------- attack ----------
   function tryAttack(){
     if(!S.canAttack || !S.player) return;
-    S.canAttack=false;
-    S.player.isAttacking=true;
-    S.player.play('attack', true);
-    setTimeout(function(){ S.canAttack=true; }, 250);
+    S.canAttack=false; S.player.isAttacking=true; S.player.play('attack', true);
+    setTimeout(()=>{ S.canAttack=true; }, 250);
 
     var dir = S.player.flipX ? -1 : 1;
     var px  = S.player.x + (40 * dir);
     var py  = S.player.y - 30;
     S.attackHit.setPosition(px, py);
     if(S.attackHit.body){ S.attackHit.body.setEnable(true); }
-    setTimeout(function(){ if(S.attackHit && S.attackHit.body) S.attackHit.body.setEnable(false); }, 200);
+    setTimeout(()=>{ if(S.attackHit && S.attackHit.body) S.attackHit.body.setEnable(false); }, 200);
   }
 
-  // ---------- enemy spawn ----------
   function spawnEnemy(scene){
     var w=scene.scale.width;
     var e=scene.textures.exists('enemies')
@@ -267,7 +296,6 @@
     e.body.setAllowGravity(true);
   }
 
-  // ---------- boot ----------
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded', function(){ wireTouchButtons(); armStart(); });
   } else {
