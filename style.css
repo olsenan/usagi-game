@@ -1,89 +1,25 @@
-/* Lock the page to the viewport (no scrolling) */
-html, body {
-  margin: 0;
-  height: 100%;
-  overflow: hidden;
-  background: #000;
-  color: #fff;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+/* Fullscreen canvas holder is the page body */
+html, body { margin:0; padding:0; background:#000; height:100%; }
+
+/* Touch controls layout */
+#touchControls{
+  position:fixed; left:12px; right:12px; bottom:12px;
+  display:flex; justify-content:space-between; gap:12px;
+  z-index:2000; pointer-events:auto;
 }
 
-/* Canvas fills the screen, stays fixed */
-#game {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  display: block;
-  image-rendering: pixelated;      /* crisp pixels */
-  background: #000;                /* fallback */
-  touch-action: none;              /* prevent swipe-scroll/zoom */
+/* Button look */
+#touchControls .ctl{
+  background:rgba(0,0,0,0.55);
+  border:none; border-radius:14px;
+  width:64px; height:64px; padding:6px;
+  display:flex; align-items:center; justify-content:center;
+}
+#touchControls .ctl img{
+  width:100%; height:100%; object-fit:contain; pointer-events:none;
 }
 
-/* Title overlay fills the screen and centers content */
-#title {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: .75rem;
-  background: linear-gradient(#0b0b12, #050508);
-  text-align: center;
-  z-index: 10;
+/* Optional: keep UI from overlapping text on extremely short screens */
+@media (max-height: 560px){
+  #touchControls{ transform: scale(.9); transform-origin: bottom center; }
 }
-#title h1 { margin: 0 16px; font-size: clamp(28px, 7vw, 48px); letter-spacing: .5px; }
-.hint { opacity: .85; margin: 0; font-size: clamp(14px, 3.5vw, 18px); }
-.mobile { display: none; }
-.desktop { display: block; }
-#startBtn {
-  margin-top: .5rem;
-  font-size: clamp(16px, 4.5vw, 20px);
-  padding: .7rem 1.3rem;
-  border-radius: 12px;
-  border: none;
-  color: #07140f;
-  background: #10b981;
-  font-weight: 700;
-}
-
-/* Touch controls overlay (hidden on desktop) */
-#touchControls {
-  position: fixed;
-  inset: 0;
-  display: none;                  /* toggled via media query below */
-  pointer-events: none;           /* only buttons receive events */
-}
-#touchControls .left-cluster,
-#touchControls .right-cluster {
-  position: absolute;
-  bottom: 4.5vh;
-  display: flex;
-  gap: 3vw;
-  pointer-events: none;
-}
-#touchControls .left-cluster  { left: 4vw; }
-#touchControls .right-cluster { right: 4vw; }
-
-#touchControls .ctl {
-  pointer-events: auto;           /* clickable */
-  width: clamp(56px, 14vw, 84px);
-  height: clamp(56px, 14vw, 84px);
-  border-radius: 999px;
-  border: 0;
-  background: rgba(255,255,255,.12);
-  color: #fff;
-  font-size: clamp(20px, 6vw, 28px);
-  font-weight: 800;
-  backdrop-filter: blur(6px);
-}
-#touchControls .ctl:active { background: #10b981; color: #05271f; }
-
-@media (pointer: coarse){            /* phones/tablets */
-  .mobile{display:block;} .desktop{display:none;}
-  #touchControls{display:block;}
-}
-/* Ensure title overlay receives taps and is on top */
-#title { z-index: 9999; pointer-events: auto; }
-#startBtn { pointer-events: auto; }
