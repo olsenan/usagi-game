@@ -1,46 +1,87 @@
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+// Canvas setup
+const cvs = document.getElementById('game');
+const ctx = cvs.getContext('2d');
+function resize() { cvs.width = 800; cvs.height = 480; }
+resize(); window.addEventListener('resize', resize);
 
-let gameStarted = false;
+// Title logic
+let state = 'title';
+const titleEl = document.getElementById('title');
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-function startGame() {
-  document.getElementById("title-screen").style.display = "none";
-  gameStarted = true;
-  gameLoop();
+function start() {
+  state = 'play';
+  titleEl.style.display = 'none';
 }
 
-// Placeholder Usagi sprite
-const usagi = { x: 50, y: 300, w: 50, h: 50, color: "white", dx: 0, dy: 0, jumping: false };
+// Start game (keyboard + tap)
+document.addEventListener('keydown', e => { if (state==='title' && e.key==='Enter') start(); });
+document.addEventListener('click', () => { if (state==='title') start(); });
 
-// Enemy list
-let enemies = [{ x: 400, y: 300, w: 50, h: 50, color: "red" }];
+// --- ASSETS (all from /assets) ---
+const img = {
+  bg1: new Image(),
+  bg2: new Image(),
+  bg3: new Image(),
+  player: new Image(),
+  bandit: new Image(),
+  ninja: new Image()
+};
+img.bg1.src   = 'assets/background1.png';
+img.bg2.src   = 'assets/background2.png';
+img.bg3.src   = 'assets/background3.png';
+img.player.src= 'assets/spritesheet.png';      // 64x64 sprite frame (placeholder ok)
+img.bandit.src= 'assets/enemy_bandit.png';     // 64x64
+img.ninja.src = 'assets/enemy_ninja.png';      // 64x64
 
-function drawUsagi() {
-  ctx.fillStyle = usagi.color;
-  ctx.fillRect(usagi.x, usagi.y, usagi.w, usagi.h);
+// Simple prototype player/enemy
+const player = { x: 120, y: 360, w: 64, h: 64, vx: 0, speed: 4 };
+const keys = {};
+document.addEventListener('keydown', e => keys[e.key] = true);
+document.addEventListener('keyup',   e => keys[e.key] = false);
+
+const enemies = [];
+function spawn() {
+  const type = Math.random() < 0.5 ? 'bandit' : 'ninja';
+  enemies.push({ type, x: cvs.width + 20, y: 360, w: 64, h: 64, vx: -2 - Math.random()*2 });
+}
+setInterval(()=> state==='play' && spawn(), 2000);
+
+// Draw helpers
+function drawBG() { ctx.drawImage(img.bg1, 0, 0, cvs.width, cvs.height); }
+function drawPlayer() { ctx.drawImage(img.player, 0, 0, 64, 64, player.x, player.y, player.w, player.h); }
+function drawEnemy(e) {
+  const sprite = e.type === 'bandit' ? img.bandit : img.ninja;
+  ctx.drawImage(sprite, 0, 0, 64, 64, e.x, e.y, e.w, e.h);
 }
 
-function drawEnemies() {
-  enemies.forEach(e => {
-    ctx.fillStyle = e.color;
-    ctx.fillRect(e.x, e.y, e.w, e.h);
-  });
+function update() {
+  if (state !== 'play') return;
+
+  // movement
+  player.vx = (keys['ArrowRight'] ? player.speed : 0) + (keys['ArrowLeft'] ? -player.speed : 0);
+  player.x += player.vx;
+  player.x = Math.max(0, Math.min(cvs.width - player.w, player.x));
+
+  // enemies
+  for (let i=enemies.length-1;i>=0;i--) {
+    const e = enemies[i];
+    e.x += e.vx;
+    if (e.x < -e.w) enemies.splice(i,1);
+  }
 }
 
-function gameLoop() {
-  if (!gameStarted) return;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawUsagi();
-  drawEnemies();
-  requestAnimationFrame(gameLoop);
+function render() {
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  if (state === 'title') {
+    drawBG();
+    // Title text is in HTML overlay; nothing else needed here
+    return;
+  }
+  drawBG();
+  drawPlayer();
+  enemies.forEach(drawEnemy);
 }
 
-// Controls
-document.getElementById("left").addEventListener("touchstart", () => usagi.x -= 10);
-document.getElementById("right").addEventListener("touchstart", () => usagi.x += 10);
-document.getElementById("jump").addEventListener("touchstart", () => { if (!usagi.jumping) { usagi.jumping = true; usagi.dy = -15; } });
-document.getElementById("attack").addEventListener("touchstart", () => {
-  enemies = enemies.filter(e => !(usagi.x < e.x + e.w && usagi.x + usagi.w > e.x && usagi.y < e.y + e.h && usagi.y + usagi.h > e.y));
-});
+function loop() { update(); render(); requestAnimationFrame(loop); }
+loop();
