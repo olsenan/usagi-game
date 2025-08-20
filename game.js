@@ -1,36 +1,36 @@
-// game.js — ground raised, extra foot clearance, anti-bleed spritesheet build
+// game.js — fixed-grid repack (no cropping), alpha-key black -> transparent
 (function () {
   'use strict';
 
-  // --- Paths ---------------------------------------------------------------
+  // --- Asset paths ----------------------------------------------------------
   const BG_PATH    = 'assets/background1.png';
-  const USAGI_RAW  = 'assets/usagi_snes_sheet.png'; // your 3x4 black-bg sheet
+  const USAGI_RAW  = 'assets/usagi_snes_sheet.png'; // your 3×4 black-bg sheet
   const ENEMY_PATH = 'assets/enemy_sprites.png';
 
-  // --- Target uniform frame size for the rebuilt sheet ---------------------
-  const FRAME_W = 256;
-  const FRAME_H = 384;
-
-  // Raw grid of the uploaded sheet (we use first 3x3 = 9 frames)
+  // --- Raw sheet grid -------------------------------------------------------
   const RAW_COLS = 3;
   const RAW_ROWS = 4;
 
-  // Strong gutters (mobile GPU-safe)
-  const SPACING = 12;       // transparent pixels between frames
-  const MARGIN  = 12;       // transparent pixels around outside border
-  const COLOR_TOL = 32;     // stricter fg detection (reduces edge specks)
-  const BLEED_INSET = 2;    // draw each crop inset inside slot (top/btm)
+  // We’ll repack into uniform frames for Phaser:
+  const FRAME_W = 256;
+  const FRAME_H = 384;
 
-  // Raise ground so the player stands higher on screen (was ~h-110)
-  const GROUND_RAISE = 160; // bigger number = ground higher (further from bottom)
+  // Big safe padding to eliminate any sampling of neighbors:
+  const MARGIN  = 16;
+  const SPACING = 16;
 
-  // Extra foot space inside each frame so feet never clip
+  // Make the player stand higher up from bottom controls:
+  const GROUND_RAISE = 160;
+
+  // Keep a little empty space below the feet inside each frame:
   const FOOT_MARGIN = 10;
 
-  // Pixel scale (keep integer for crisp pixels)
+  // Alpha-keying threshold (how “close to black” becomes transparent)
+  const BLACK_TOL = 40; // slightly generous so near-black goes transparent
+
+  // Crisp pixel display scale (integer preferred)
   const SCALE = 0.25;
 
-  // --- State ---------------------------------------------------------------
   const S = {
     game:null, player:null, cursors:null,
     ground:null, groundY:0, enemies:null, attackHit:null,
@@ -38,81 +38,81 @@
     canAttack:true
   };
 
-  // --- Build padded, bottom-centered sheet from the raw 3x4 grid ----------
-  function buildPaddedSheet(scene, rawKey, outKey){
+  /**
+   * Build a bleed-proof sprite sheet:
+   * - Slice the raw 3×4 grid with FIXED cell size (no cropping).
+   * - Per-pixel: key out black to transparent.
+   * - Draw each fixed cell into a padded slot, bottom-centered.
+   */
+  function buildFixedGridSheet(scene, rawKey, outKey){
     const tex = scene.textures.get(rawKey);
     const srcImg = tex.getSourceImage();
     const rawW = srcImg.width, rawH = srcImg.height;
+
+    // Raw cell size from the delivered sheet:
     const cellW = Math.floor(rawW / RAW_COLS);
     const cellH = Math.floor(rawH / RAW_ROWS);
 
+    // Read whole sheet into a canvas
     const srcCvs = document.createElement('canvas');
     srcCvs.width = rawW; srcCvs.height = rawH;
     const sctx = srcCvs.getContext('2d', { willReadFrequently:true });
     sctx.imageSmoothingEnabled = false;
     sctx.drawImage(srcImg, 0, 0);
 
-    // Estimate bg color from corners (works for black bg too)
-    function avgBg(){
-      const pts = [[2,2],[rawW-3,2],[2,rawH-3],[rawW-3,rawH-3]];
-      let r=0,g=0,b=0,n=0;
-      for(const [x,y] of pts){ const d=sctx.getImageData(x,y,1,1).data; r+=d[0]; g+=d[1]; b+=d[2]; n++; }
-      return [r/n,g/n,b/n];
-    }
-    const [bgR,bgG,bgB] = avgBg();
-    const dist = (r,g,b)=>Math.hypot(r-bgR,g-bgG,b-bgB);
-
+    // Output canvas for first 3×3 = 9 frames
     const OUT_COLS = 3, OUT_ROWS = 3, OUT_FRAMES = 9;
-    const padW = OUT_COLS*FRAME_W + (OUT_COLS-1)*SPACING + 2*MARGIN;
-    const padH = OUT_ROWS*FRAME_H + (OUT_ROWS-1)*SPACING + 2*MARGIN;
+    const outW = OUT_COLS*FRAME_W + (OUT_COLS-1)*SPACING + 2*MARGIN;
+    const outH = OUT_ROWS*FRAME_H + (OUT_ROWS-1)*SPACING + 2*MARGIN;
     const outCvs = document.createElement('canvas');
-    outCvs.width = padW; outCvs.height = padH;
+    outCvs.width = outW; outCvs.height = outH;
     const octx = outCvs.getContext('2d');
     octx.imageSmoothingEnabled = false;
 
     let outIndex = 0;
-    for(let r=0; r<OUT_ROWS; r++){
-      for(let c=0; c<OUT_COLS; c++){
-        const sx0 = c*cellW, sy0 = r*cellH;
-        const imgData = sctx.getImageData(sx0, sy0, cellW, cellH);
-        const data = imgData.data;
+    outer:
+    for(let r=0; r<RAW_ROWS; r++){
+      for(let c=0; c<RAW_COLS; c++){
+        // Stop after first 3 rows × 3 cols = 9 frames
+        if(r>=OUT_ROWS || c>=OUT_COLS){ if(c>=OUT_COLS) break; }
+        if(outIndex >= OUT_FRAMES) break outer;
 
-        // Crop bounds (skip pixels near bg color)
-        let minX=cellW, minY=cellH, maxX=-1, maxY=-1;
-        for(let y=0; y<cellH; y++){
-          for(let x=0; x<cellW; x++){
-            const i=(y*cellW+x)*4, R=data[i],G=data[i+1],B=data[i+2],A=data[i+3];
-            if (A>16 && dist(R,G,B)>COLOR_TOL){
-              if(x<minX)minX=x; if(x>maxX)maxX=x;
-              if(y<minY)minY=y; if(y>maxY)maxY=y;
-            }
+        // Grab the raw cell as-is
+        const sx = c*cellW, sy = r*cellH;
+        const img = sctx.getImageData(sx, sy, cellW, cellH);
+        const d = img.data;
+
+        // Alpha-key: turn (near) black to transparent, but do NOT crop/trim
+        for(let i=0; i<d.length; i+=4){
+          const R=d[i], G=d[i+1], B=d[i+2];
+          // Euclidean distance to black (0,0,0)
+          const distBlack = Math.hypot(R, G, B);
+          if(distBlack < BLACK_TOL){
+            d[i+3] = 0; // transparent
           }
         }
-        if(maxX<minX || maxY<minY){ minX=0; minY=0; maxX=cellW-1; maxY=cellH-1; }
 
-        const cropW=maxX-minX+1, cropH=maxY-minY+1;
-        const srcX=sx0+minX, srcY=sy0+minY;
+        // Paint this fixed cell into a temporary canvas
+        const tmp = document.createElement('canvas');
+        tmp.width = cellW; tmp.height = cellH;
+        const tctx = tmp.getContext('2d');
+        tctx.imageSmoothingEnabled = false;
+        tctx.putImageData(img, 0, 0);
 
-        // Slot origin for this frame
+        // Destination slot (bottom-centered)
         const dx0 = MARGIN + c*(FRAME_W + SPACING);
         const dy0 = MARGIN + r*(FRAME_H + SPACING);
+        const dx = dx0 + Math.floor((FRAME_W - cellW)/2);
+        const dy = dy0 + (FRAME_H - cellH) - FOOT_MARGIN;
 
-        // Bottom-center align; leave FOOT_MARGIN room under feet
-        const dx = dx0 + Math.floor((FRAME_W - cropW)/2);
-        const dy = dy0 + (FRAME_H - cropH) - FOOT_MARGIN;
+        octx.drawImage(tmp, dx, dy);
 
-        // Draw inset to avoid vertical neighbor sampling on some GPUs
-        octx.drawImage(
-          srcCvs, srcX, srcY, cropW, cropH,
-          dx, dy + BLEED_INSET,
-          cropW, Math.max(1, cropH - BLEED_INSET*2)
-        );
-
-        outIndex++; if(outIndex>=OUT_FRAMES) break;
+        outIndex++;
+        if(outIndex >= OUT_FRAMES) break outer;
       }
-      if(outIndex>=OUT_FRAMES) break;
     }
 
+    // Register as a Phaser spritesheet
     scene.textures.addSpriteSheet(outKey, outCvs, {
       frameWidth: FRAME_W,
       frameHeight: FRAME_H,
@@ -122,7 +122,7 @@
     scene.textures.get(outKey)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
 
-  // --- UI wiring ------------------------------------------------------------
+  // Mobile buttons
   function wireTouchButtons(){
     const btns = document.querySelectorAll('#touchControls .ctl');
     btns.forEach(btn=>{
@@ -171,16 +171,19 @@
 
     this.add.image(0,0,'bg').setOrigin(0).setDisplaySize(w,h);
 
-    // Build anti-bleed padded sheet
-    buildPaddedSheet(this, 'usagi_raw', 'usagi_pad');
+    // Build fixed-grid, alpha-keyed, padded sheet
+    buildFixedGridSheet(this, 'usagi_raw', 'usagi_pad');
 
-    // Ground raised (further from bottom so feet are never on the bezel/controls)
+    // Ground higher (further from bottom bezel)
     S.groundY = h - GROUND_RAISE;
     const ground = this.add.rectangle(0, S.groundY, w*2, 24, 0x000000, 0);
     this.physics.add.existing(ground, true);
     S.ground = ground;
 
-    // Animations (first 9 frames)
+    // Animations: use the first row for idle/walk, second row for attack
+    // Frames map (0..8):  [ (0,0) (1,0) (2,0),
+    //                       (0,1) (1,1) (2,1),
+    //                       (0,2) (1,2) (2,2) ]
     this.anims.create({ key:'idle',   frames:[{ key:'usagi_pad', frame:1 }], frameRate:1, repeat:-1 });
     this.anims.create({ key:'walk',   frames:this.anims.generateFrameNumbers('usagi_pad',{start:0,end:2}), frameRate:10, repeat:-1 });
     this.anims.create({ key:'attack', frames:this.anims.generateFrameNumbers('usagi_pad',{start:3,end:5}), frameRate:14, repeat:0 });
@@ -191,7 +194,7 @@
       .setCollideWorldBounds(true)
       .setScale(SCALE);
 
-    // Physics body (tight torso; feet safe above ground)
+    // Physics body (tight around torso)
     const hitW_src = 56, hitH_src = 88;
     const bodyW = Math.round(hitW_src / SCALE);
     const bodyH = Math.round(hitH_src / SCALE);
