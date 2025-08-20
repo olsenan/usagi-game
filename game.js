@@ -1,9 +1,31 @@
-// game.js — ES5-safe; input-driven anims; ground/colliders; attack hitbox; mobile start
+// game.js — Works with a single-frame IMAGE now; easily switch to a real spritesheet later
 (function () {
   'use strict';
 
   function LOG(m){ try{ if(window._status&&_status.show){ _status.show(m); } }catch(e){} try{ console.log(m); }catch(e){} }
   if(!window.Phaser){ LOG('Phaser not loaded — ensure CDN <script> is before game.js'); }
+
+  // ====== CONFIG YOU WILL CHANGE LATER WHEN YOU HAVE A REAL SHEET ======
+  // Current file is a single-frame transparent image (64x64):
+  var USAGI_FILE = 'assets/usagi_debug_sheet.png';
+  var USAGI = {
+    isSheet: false,             // <-- set to true when you upload a real spritesheet
+    frameWidth: 64,             // if isSheet=true, fill these correctly
+    frameHeight: 64,
+    columns: 1,
+    rows: 1
+    // For sheets with borders/gaps, you can also add:
+    // margin: 0,
+    // spacing: 0
+  };
+
+  // When you have a 3×3 sheet (256×384 per frame), change to:
+  // var USAGI_FILE = 'assets/snes_usagi_sprite_sheet.png';
+  // var USAGI = { isSheet:true, frameWidth:256, frameHeight:384, columns:3, rows:3 };
+
+  // ====== OTHER ASSETS ======
+  var BG_PATH    = 'assets/background1.png';
+  var ENEMY_PATH = 'assets/enemy_sprites.png';
 
   var S = {
     game:null,cursors:null,player:null,enemies:null,canAttack:true,
@@ -11,11 +33,7 @@
     ground:null, groundY:0, attackHit:null
   };
 
-  var BG_PATH    = 'assets/background1.png';
-  var USAGI_PATH = 'assets/snes_usagi_sprite_sheet.png'; // 3x3 grid; 256x384 per frame
-  var ENEMY_PATH = 'assets/enemy_sprites.png';
-
-  // ---- mobile buttons ----
+  // ---------- mobile buttons ----------
   function wireTouchButtons(){
     var btns=document.querySelectorAll('#touchControls .ctl');
     for(var i=0;i<btns.length;i++){
@@ -31,7 +49,7 @@
     }
   }
 
-  // ---- start screen (robust) ----
+  // ---------- start overlay ----------
   function armStart(){
     var titleEl=document.getElementById('title');
     var startBtn=document.getElementById('startBtn');
@@ -59,22 +77,33 @@
     LOG('Start armed — tap anywhere or press Start.');
   }
 
-  // ---- Phaser scene ----
+  // ---------- Phaser: preload ----------
   function preload(){
     LOG('Preload: queue assets…');
     this.load.image('bg', BG_PATH+'?v='+Date.now());
-    this.load.spritesheet('usagi', USAGI_PATH+'?v='+Date.now(), { frameWidth:256, frameHeight:384 });
+
+    if (USAGI.isSheet) {
+      this.load.spritesheet('usagi', USAGI_FILE+'?v='+Date.now(), {
+        frameWidth: USAGI.frameWidth, frameHeight: USAGI.frameHeight,
+        margin: USAGI.margin||0, spacing: USAGI.spacing||0
+      });
+    } else {
+      this.load.image('usagi', USAGI_FILE+'?v='+Date.now());
+    }
+
     this.load.spritesheet('enemies', ENEMY_PATH+'?v='+Date.now(), { frameWidth:64, frameHeight:64 });
-    this.load.on('filecomplete',function(key){ LOG('Loaded: '+key); });
-    this.load.on('loaderror',function(file){ LOG('LOAD ERROR: '+(file&&file.src?file.src:'unknown')); });
-    this.load.on('complete',function(){ LOG('All assets loaded'); });
+
+    this.load.on('filecomplete', key => LOG('Loaded: '+key));
+    this.load.on('loaderror', file => LOG('LOAD ERROR: '+(file && file.src ? file.src : 'unknown')));
+    this.load.on('complete',   ()  => LOG('All assets loaded'));
   }
 
+  // ---------- Phaser: create ----------
   function create(){
     var w=this.scale.width, h=this.scale.height;
 
     // Background
-    if(this.textures.exists('bg')){
+    if (this.textures.exists('bg')) {
       var bg=this.add.image(0,0,'bg').setOrigin(0); bg.setDisplaySize(w,h);
       this.scale.on('resize',function(sz){ var W=sz.width,H=sz.height; try{this.cameras.resize(W,H);}catch(e){} bg.setDisplaySize(W,H); },this);
     }
@@ -85,60 +114,67 @@
     this.physics.add.existing(groundRect, true);
     S.ground = groundRect;
 
-    // Animations (3×3)
-    this.anims.create({ key:'idle',   frames:[{ key:'usagi', frame:1 }], frameRate:1,  repeat:-1 });
-    this.anims.create({ key:'walk',   frames:this.anims.generateFrameNumbers('usagi',{start:0,end:2}), frameRate:10, repeat:-1 });
-    this.anims.create({ key:'attack', frames:this.anims.generateFrameNumbers('usagi',{start:3,end:5}), frameRate:14, repeat:0  });
-    this.anims.create({ key:'heavy',  frames:this.anims.generateFrameNumbers('usagi',{start:6,end:8}), frameRate:12, repeat:0  });
+    // Player (image vs spritesheet)
+    if (USAGI.isSheet) {
+      // Create animations from the sheet
+      this.anims.create({ key:'idle',   frames:[{ key:'usagi', frame:1 }], frameRate:1, repeat:-1 });
+      this.anims.create({ key:'walk',   frames:this.anims.generateFrameNumbers('usagi',{start:0,end:Math.min(2,USAGI.columns*USAGI.rows-1)}), frameRate:10, repeat:-1 });
+      // If you have attack frames, set the correct ranges here:
+      this.anims.create({ key:'attack', frames:this.anims.generateFrameNumbers('usagi',{start:3,end:5}), frameRate:14, repeat:0 });
 
-    // Player
-    S.player = this.physics.add.sprite(120, S.groundY, 'usagi', 1).setCollideWorldBounds(true);
-    var targetH=128, scale=targetH/384; S.player.setScale(scale);
+      S.player = this.physics.add.sprite(120, S.groundY, 'usagi', 1).setCollideWorldBounds(true);
 
-    // Tight body & offset so feet sit on baseline
-    var bodyW=32, bodyH=64;
-    S.player.body.setSize(bodyW, bodyH);
-    var offX=((256*scale)-bodyW)/2/scale;
-    var offY=((384*scale)-bodyH-4)/scale;
-    S.player.body.setOffset(offX, offY);
-    S.player.setOrigin(0.5,1);
-    S.player.play('idle');
-    S.player.isAttacking=false;
+      // Scale tall frames down (assuming SNES-like 256×384 frames)
+      var targetH = 128, scale = targetH / (USAGI.frameHeight||384);
+      S.player.setScale(scale);
+
+      // Tight hitbox & offset (tweak if your art differs)
+      var bodyW=32, bodyH=64;
+      S.player.body.setSize(bodyW, bodyH);
+      var offX=((USAGI.frameWidth*scale)-bodyW)/2/scale;
+      var offY=((USAGI.frameHeight*scale)-bodyH-4)/scale;
+      S.player.body.setOffset(offX, offY);
+
+      S.player.setOrigin(0.5,1);
+      S.player.play('idle');
+    } else {
+      // Single-frame image: show as a sprite and simulate "idle"
+      S.player = this.physics.add.image(120, S.groundY, 'usagi').setCollideWorldBounds(true);
+      // Scale to ~64–96 px tall (your debug image is already 64×64, so leave as-is)
+      S.player.setOrigin(0.5,1);
+      // Give it a reasonable body
+      S.player.body.setSize(32, 40);
+      S.player.body.setOffset(16, 24);
+    }
 
     this.physics.add.collider(S.player, S.ground);
 
-    // Return to idle after attacks
-    this.anims.on('complete', function(anim, spr){
-      if(spr===S.player && (anim.key==='attack' || anim.key==='heavy')){
-        S.player.isAttacking=false;
-        S.player.play('idle');
-      }
-    }, this);
-
     // Input
     S.cursors=this.input.keyboard.createCursorKeys();
-    this.input.keyboard.on('keydown-SPACE', function(){ tryAttack(); }, this);
+    this.input.keyboard.on('keydown-SPACE', function(){ tryAttack(this); }.bind(this));
 
-    // Attack hitbox (sensor)
+    // Attack hitbox (sensor) — works for both image and sheet versions
     S.attackHit = this.add.rectangle(0,0, 50, 40, 0xff0000, 0);
     this.physics.add.existing(S.attackHit, false);
     S.attackHit.body.setAllowGravity(false);
     S.attackHit.body.setEnable(false);
 
+    // Enemies
+    S.enemies = this.physics.add.group();
+    this.physics.add.collider(S.enemies, S.ground);
+
+    // Overlap: attack sensor vs enemies
     this.physics.add.overlap(S.attackHit, function(){ return S.enemies; }, function(hit, enemy){
       enemy.setVelocityX(-200);
       enemy.setTint(0xffaaaa);
       setTimeout(function(){ if(enemy && enemy.clearTint) enemy.clearTint(); }, 200);
     }, null, this);
 
-    // Enemies
-    S.enemies = this.physics.add.group();
-    this.physics.add.collider(S.enemies, S.ground);
-
     spawnEnemy(this);
     this.time.addEvent({ delay:1800, loop:true, callback:function(){ spawnEnemy(this); }, callbackScope:this });
   }
 
+  // ---------- Phaser: update ----------
   function update(){
     var p=S.player; if(!p||!p.body) return;
 
@@ -147,27 +183,24 @@
     var jump =(S.cursors&&S.cursors.up.isDown)||S.touch.jump;
     var atk  =S.touch.attack;
 
-    if(!p.isAttacking){
-      p.setVelocityX(0);
-      if(left){  p.setVelocityX(-180); p.flipX=true;  p.play('walk',true); }
-      else if(right){ p.setVelocityX(180); p.flipX=false; p.play('walk',true); }
-      else { p.play('idle',true); }
-    }
+    p.setVelocityX(0);
+    if(left){  p.setVelocityX(-180); if(p.flipX!==undefined) p.flipX=true;  }
+    else if(right){ p.setVelocityX(180); if(p.flipX!==undefined) p.flipX=false; }
 
     if(jump && p.body.blocked.down){ p.setVelocityY(-420); }
-    if(atk){ tryAttack(); }
+    if(atk){ tryAttack(this); }
 
     S.enemies.children.iterate(function(e){ if(e && e.x < -e.width) e.destroy(); });
   }
 
-  function tryAttack(){
+  // ---------- attack ----------
+  function tryAttack(scene){
     if(!S.canAttack || !S.player) return;
     S.canAttack=false;
-    S.player.isAttacking=true;
-    S.player.play('attack', true);
     setTimeout(function(){ S.canAttack=true; }, 250);
 
-    var dir = S.player.flipX ? -1 : 1;
+    // Position the sensor in front of Usagi for ~200ms
+    var dir = (S.player.flipX===true) ? -1 : 1;
     var px  = S.player.x + (34 * dir);
     var py  = S.player.y - 28;
     S.attackHit.setPosition(px, py);
@@ -175,6 +208,7 @@
     setTimeout(function(){ if(S.attackHit && S.attackHit.body) S.attackHit.body.setEnable(false); }, 200);
   }
 
+  // ---------- enemy spawn ----------
   function spawnEnemy(scene){
     var w=scene.scale.width;
     var e=scene.textures.exists('enemies')
@@ -192,7 +226,7 @@
     e.body.setAllowGravity(true);
   }
 
-  // Arm after DOM ready
+  // ---------- boot after DOM ready ----------
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded', function(){ wireTouchButtons(); armStart(); });
   } else {
