@@ -16,8 +16,8 @@ html, body {
   height: 100vh;
   display: block;
   image-rendering: pixelated;      /* crisp pixels */
-  background: #000;                 /* fallback */
-  touch-action: none;               /* prevent swipe-scroll/zoom */
+  background: #000;                /* fallback */
+  touch-action: none;              /* prevent swipe-scroll/zoom */
 }
 
 /* Title overlay fills the screen and centers content */
@@ -33,17 +33,10 @@ html, body {
   text-align: center;
   z-index: 10;
 }
-
-#title h1 {
-  margin: 0 16px;
-  font-size: clamp(28px, 7vw, 48px);
-  letter-spacing: .5px;
-}
-
+#title h1 { margin: 0 16px; font-size: clamp(28px, 7vw, 48px); letter-spacing: .5px; }
 .hint { opacity: .85; margin: 0; font-size: clamp(14px, 3.5vw, 18px); }
 .mobile { display: none; }
 .desktop { display: block; }
-
 #startBtn {
   margin-top: .5rem;
   font-size: clamp(16px, 4.5vw, 20px);
@@ -55,7 +48,39 @@ html, body {
   font-weight: 700;
 }
 
-@media (pointer: coarse) { /* phones/tablets */
-  .mobile { display: block; }
-  .desktop { display: none; }
+/* Touch controls overlay (hidden on desktop) */
+#touchControls {
+  position: fixed;
+  inset: 0;
+  display: none;                  /* toggled via media query below */
+  pointer-events: none;           /* only buttons receive events */
+}
+#touchControls .left-cluster,
+#touchControls .right-cluster {
+  position: absolute;
+  bottom: 4.5vh;
+  display: flex;
+  gap: 3vw;
+  pointer-events: none;
+}
+#touchControls .left-cluster  { left: 4vw; }
+#touchControls .right-cluster { right: 4vw; }
+
+#touchControls .ctl {
+  pointer-events: auto;           /* clickable */
+  width: clamp(56px, 14vw, 84px);
+  height: clamp(56px, 14vw, 84px);
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  font-size: clamp(20px, 6vw, 28px);
+  font-weight: 800;
+  backdrop-filter: blur(6px);
+}
+#touchControls .ctl:active { background: #10b981; color: #05271f; }
+
+@media (pointer: coarse){            /* phones/tablets */
+  .mobile{display:block;} .desktop{display:none;}
+  #touchControls{display:block;}
 }
