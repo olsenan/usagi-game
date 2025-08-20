@@ -1,11 +1,11 @@
-// game.js — robust start + mobile friendly + enemies + animation-ready
+// game.js — SAFE MODE start + status banner + basic loop
 'use strict';
 
 // ---------- DOM refs ----------
-const titleEl   = document.getElementById('title');
-const startBtn  = document.getElementById('startBtn');
-const cvs       = document.getElementById('game');
-const ctx       = cvs.getContext('2d');
+const titleEl  = document.getElementById('title');
+const startBtn = document.getElementById('startBtn');
+const cvs      = document.getElementById('game');
+const ctx      = cvs.getContext('2d');
 
 // ---------- Canvas fit ----------
 function fitCanvas() {
@@ -19,17 +19,34 @@ fitCanvas();
 addEventListener('resize', fitCanvas);
 addEventListener('orientationchange', () => setTimeout(fitCanvas, 120));
 
-// ---------- State ----------
-let state = 'title';
-let img = {};
+// ---------- Status banner (top-left) ----------
+let statusLines = [];
+function setStatus(...lines) {
+  statusLines = lines;
+}
+function drawStatus() {
+  if (!statusLines.length) return;
+  const pad = 8, w = Math.min(360, cvs.clientWidth - 16);
+  const h = 24 + 16 * statusLines.length;
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  ctx.fillRect(pad, pad, w, h);
+  ctx.fillStyle = '#fff';
+  ctx.font = '12px system-ui';
+  ctx.fillText('Status:', pad + 8, pad + 18);
+  statusLines.forEach((t, i) => ctx.fillText(t, pad + 8, pad + 36 + i * 16));
+}
+
+// ---------- Keys ----------
 const keys = {};
-let last = 0;
+document.addEventListener('keydown', e => {
+  keys[e.code || e.key] = true;
+  if (state === 'title' && (e.key === 'Enter' || e.code === 'Enter')) {
+    start('Enter key');
+  }
+});
+document.addEventListener('keyup', e => { keys[e.code || e.key] = false; });
 
-// ---------- Key handling ----------
-document.addEventListener('keydown', e => { keys[e.code || e.key] = true; if (state==='title' && e.key==='Enter') start(); });
-document.addEventListener('keyup',   e => { keys[e.code || e.key] = false; });
-
-// Touch controls (if present in HTML)
+// ---------- Touch controls (if present) ----------
 for (const b of document.querySelectorAll('#touchControls .ctl')) {
   const code = b.dataset.key;
   const press   = e => { e.preventDefault(); keys[code] = true;  };
@@ -40,24 +57,34 @@ for (const b of document.querySelectorAll('#touchControls .ctl')) {
   b.addEventListener('pointerleave', release,{ passive:false });
 }
 
-// ---------- Start wiring (multiple fallbacks) ----------
-function armStartListeners() {
-  // Button click
-  if (startBtn) startBtn.addEventListener('click', start, { passive:true });
+// ---------- State ----------
+let state = 'title';
+let img = {};
+let last = 0;
 
-  // Tap anywhere on title overlay
-  if (titleEl) {
-    titleEl.addEventListener('click', start, { passive:true });
-    titleEl.addEventListener('touchstart', (e)=>{ e.preventDefault(); start(); }, { passive:false });
+// Arm start listeners (button + overlay + canvas)
+function armStart() {
+  setStatus('Ready: tap Start / overlay / canvas, or press Enter');
+
+  // Button
+  if (startBtn) {
+    startBtn.addEventListener('click', () => start('startBtn click'), { once:true, passive:true });
+    startBtn.addEventListener('touchstart', e => { e.preventDefault(); start('startBtn touch'); }, { once:true, passive:false });
   }
 
-  // Tap canvas as fallback
-  cvs.addEventListener('click', start, { passive:true });
-  cvs.addEventListener('touchstart', (e)=>{ e.preventDefault(); start(); }, { passive:false });
-}
-armStartListeners();
+  // Overlay area
+  if (titleEl) {
+    titleEl.addEventListener('click', () => start('title click'), { once:true, passive:true });
+    titleEl.addEventListener('touchstart', e => { e.preventDefault(); start('title touch'); }, { once:true, passive:false });
+  }
 
-// Only block page scrolling AFTER we start the game (avoids interfering with start tap)
+  // Canvas fallback (helps if overlay CSS blocks pointer events)
+  cvs.addEventListener('click', () => start('canvas click'), { once:true, passive:true });
+  cvs.addEventListener('touchstart', e => { e.preventDefault(); start('canvas touch'); }, { once:true, passive:false });
+}
+armStart();
+
+// Only block page scrolling AFTER we start (avoid interfering with initial tap)
 function blockTouchScrolling() {
   ['touchmove','gesturestart'].forEach(ev =>
     document.addEventListener(ev, e => e.preventDefault(), { passive:false })
@@ -67,11 +94,10 @@ function blockTouchScrolling() {
 // ---------- Assets ----------
 const ASSETS = {
   bg1:   'assets/background1.png',
-  player:'assets/spritesheet.png',       // 4x4 frames: idle, walk, jump, attack
-  bandit:'assets/enemy_bandit.png',      // 64x64
-  ninja: 'assets/enemy_ninja.png',       // 64x64
+  player:'assets/spritesheet.png',
+  bandit:'assets/enemy_bandit.png',
+  ninja: 'assets/enemy_ninja.png',
 };
-
 function loadImages(map) {
   const out = {};
   return Promise.all(Object.entries(map).map(([key, src]) => new Promise((res) => {
@@ -83,39 +109,37 @@ function loadImages(map) {
 }
 
 // ---------- Game objects ----------
-const player = {
-  x: 120, y: 0, w: 64, h: 64,
-  speed: 4, vy: 0, onGround: false,
-  animRow: 0, animCol: 0, frameTimer: 0
-};
+const player = { x: 120, y: 0, w: 64, h: 64, speed: 4, vy: 0, onGround: false,
+  animRow: 0, animCol: 0, frameTimer: 0 };
 const groundY = () => Math.floor(cvs.clientHeight - 72);
-
-const frameDuration = 0.15; // sec per frame (4 cols each row)
-const frameCount = 4;
-
+const frameDuration = 0.15, frameCount = 4;
 const enemies = [];
-let spawnTimer = 0;
-let spawnEvery = 1.2;
-let scrollX = 0;
+let spawnTimer = 0, spawnEvery = 1.2, scrollX = 0;
 
 // ---------- Start game ----------
-async function start() {
+async function start(source) {
   if (state !== 'title') return;
   state = 'play';
 
-  // Hide title overlay
+  // Visual confirmation the tap/keypress was received
+  setStatus(`Start received via: ${source}`, 'Loading assets...');
+
+  // Hide overlay now
   if (titleEl) titleEl.style.display = 'none';
 
-  // Now block page scrolling (after start gesture)
+  // Now block page scrolling
   blockTouchScrolling();
 
-  // Load art
+  // Draw immediate feedback so we know we're in the game loop context
+  ctx.fillStyle = '#0a2150';
+  ctx.fillRect(0, 0, cvs.clientWidth, cvs.clientHeight);
+  drawStatus();
+
+  // Load images (non-blocking UI)
   img = await loadImages(ASSETS);
 
-  // Init player position
+  // Init player & first enemy
   player.y = groundY();
-
-  // Force a first enemy right away so you see one
   spawnEnemy();
 
   last = performance.now();
@@ -126,14 +150,18 @@ async function start() {
 function loop(ts) {
   const dt = Math.min(0.05, (ts - last) / 1000);
   last = ts;
+
   update(dt);
   render();
-  if (state === 'play') requestAnimationFrame(loop);
+
+  requestAnimationFrame(loop);
 }
 
 // ---------- Update ----------
 function update(dt) {
-  // Movement
+  if (state !== 'play') return;
+
+  // movement
   let move = 0;
   if (keys['ArrowRight']) move += 1;
   if (keys['ArrowLeft'])  move -= 1;
@@ -142,29 +170,27 @@ function update(dt) {
   // BG scroll
   scrollX += Math.max(0, move) * 80 * dt;
 
-  // Jump
+  // jump
   if (keys['Space'] && player.onGround) { player.vy = -720; player.onGround = false; }
-
-  // Gravity
   const gY = groundY();
   if (!player.onGround) player.vy += 2200 * dt;
   player.y += player.vy * dt;
   if (player.y >= gY) { player.y = gY; player.vy = 0; player.onGround = true; }
 
-  // Animation state
-  if (!player.onGround) player.animRow = 2;           // jump
-  else if (keys['KeyA']) player.animRow = 3;          // attack
-  else if (move !== 0)   player.animRow = 1;          // walk
-  else                   player.animRow = 0;          // idle
+  // anim row
+  if (!player.onGround) player.animRow = 2;
+  else if (keys['KeyA']) player.animRow = 3;
+  else if (move !== 0)   player.animRow = 1;
+  else                   player.animRow = 0;
 
-  // Advance frame
+  // anim frame
   player.frameTimer += dt;
   if (player.frameTimer >= frameDuration) {
     player.animCol = (player.animCol + 1) % frameCount;
     player.frameTimer = 0;
   }
 
-  // Enemies
+  // enemies
   spawnTimer += dt;
   if (spawnTimer >= spawnEvery) { spawnEnemy(); spawnTimer = 0; }
   enemies.forEach(e => e.x += e.vx);
@@ -172,20 +198,18 @@ function update(dt) {
     if (enemies[i].x < -enemies[i].w - 20) enemies.splice(i, 1);
   }
 
-  // Attack (KeyA): simple KO/knockback
+  // attack
   if (keys['KeyA']) {
     enemies.forEach(e => {
       const dx = Math.abs((e.x + e.w/2) - (player.x + player.w/2));
       const dy = Math.abs(e.y - player.y);
       if (!e.dead && dx < 60 && dy < 10) {
-        e.hp -= 1;
-        e.vx -= 1.1;
+        e.hp -= 1; e.vx -= 1.1;
         if (e.hp <= 0) e.dead = true;
       }
     });
   }
 
-  // Slide KOs off-screen
   enemies.forEach(e => { if (e.dead) e.x -= 3; });
 }
 
@@ -200,7 +224,7 @@ function spawnEnemy() {
 
 // ---------- Render ----------
 function render() {
-  // BG (tile horizontally)
+  // bg (tile)
   if (img.bg1) {
     const iw = img.bg1.width, ih = img.bg1.height;
     const scaleY = cvs.clientHeight / ih;
@@ -215,11 +239,11 @@ function render() {
     ctx.fillRect(0, 0, cvs.clientWidth, cvs.clientHeight);
   }
 
-  // Ground guide
+  // ground guide
   ctx.fillStyle = 'rgba(255,255,255,0.06)';
   ctx.fillRect(0, groundY()+64, cvs.clientWidth, 4);
 
-  // Player (animated)
+  // player
   if (img.player) {
     const sx = (player.animCol % 4) * 64;
     const sy = (player.animRow % 4) * 64;
@@ -229,7 +253,7 @@ function render() {
     ctx.fillRect(player.x, player.y - player.h, player.w, player.h);
   }
 
-  // Enemies (sprite or bright fallback box)
+  // enemies (sprite or bright fallback box)
   enemies.forEach(e => {
     const sprite = e.type === 'bandit' ? img.bandit : img.ninja;
     if (sprite && sprite.naturalWidth > 0) {
@@ -239,4 +263,7 @@ function render() {
       ctx.fillRect(e.x, e.y - e.h, e.w, e.h);
     }
   });
+
+  // status banner
+  drawStatus();
 }
