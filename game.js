@@ -1,29 +1,26 @@
-// game.js — Works with a single-frame IMAGE now; easily switch to a real spritesheet later
+// game.js — Use your SNES sheet, auto-remove purple bg, slice 3x3 frames (256x384)
 (function () {
   'use strict';
 
   function LOG(m){ try{ if(window._status&&_status.show){ _status.show(m); } }catch(e){} try{ console.log(m); }catch(e){} }
   if(!window.Phaser){ LOG('Phaser not loaded — ensure CDN <script> is before game.js'); }
 
-  // ====== CONFIG YOU WILL CHANGE LATER WHEN YOU HAVE A REAL SHEET ======
-  // Current file is a single-frame transparent image (64x64):
-  var USAGI_FILE = 'assets/usagi_debug_sheet.png';
-  var USAGI = {
-    isSheet: false,             // <-- set to true when you upload a real spritesheet
-    frameWidth: 64,             // if isSheet=true, fill these correctly
-    frameHeight: 64,
-    columns: 1,
-    rows: 1
-    // For sheets with borders/gaps, you can also add:
-    // margin: 0,
-    // spacing: 0
-  };
+  // ==== CONFIG: make sure this filename matches your repo ====
+  // Example: 'assets/snes_usagi_sprite_sheet.png'  (rename here if yours differs)
+  var USAGI_SOURCE = 'assets/snes_usagi_sprite_sheet.png';
 
-  // When you have a 3×3 sheet (256×384 per frame), change to:
-  // var USAGI_FILE = 'assets/snes_usagi_sprite_sheet.png';
-  // var USAGI = { isSheet:true, frameWidth:256, frameHeight:384, columns:3, rows:3 };
+  // Your sheet layout (matches the SNES art you showed: 3 columns × 3 rows)
+  var FRAME_W = 256, FRAME_H = 384;
+  var COLUMNS = 3, ROWS = 3;
 
-  // ====== OTHER ASSETS ======
+  // If your sheet has borders/gaps, set these (most don't)
+  var SHEET_MARGIN = 0;
+  var SHEET_SPACING = 0;
+
+  // Chroma-key target (dark purple). We'll remove anything near this color.
+  // You can tweak these values if needed.
+  var KEY_R = 22, KEY_G = 18, KEY_B = 30, KEY_TOL = 34; // ± tolerance
+
   var BG_PATH    = 'assets/background1.png';
   var ENEMY_PATH = 'assets/enemy_sprites.png';
 
@@ -82,15 +79,10 @@
     LOG('Preload: queue assets…');
     this.load.image('bg', BG_PATH+'?v='+Date.now());
 
-    if (USAGI.isSheet) {
-      this.load.spritesheet('usagi', USAGI_FILE+'?v='+Date.now(), {
-        frameWidth: USAGI.frameWidth, frameHeight: USAGI.frameHeight,
-        margin: USAGI.margin||0, spacing: USAGI.spacing||0
-      });
-    } else {
-      this.load.image('usagi', USAGI_FILE+'?v='+Date.now());
-    }
+    // Load Usagi sheet as a plain image first (with purple bg)
+    this.load.image('usagi_raw', USAGI_SOURCE+'?v='+Date.now());
 
+    // Enemies (simple 64×64 cells)
     this.load.spritesheet('enemies', ENEMY_PATH+'?v='+Date.now(), { frameWidth:64, frameHeight:64 });
 
     this.load.on('filecomplete', key => LOG('Loaded: '+key));
@@ -98,15 +90,56 @@
     this.load.on('complete',   ()  => LOG('All assets loaded'));
   }
 
+  // ---------- convert purple to transparent & register spritesheet ----------
+  function createSpritesheetFromImage(scene, rawKey, outKey){
+    var rawTex = scene.textures.get(rawKey);
+    if(!rawTex){ LOG('ERROR: raw texture missing: '+rawKey); return false; }
+
+    var src = rawTex.getSourceImage();
+    var canvasTex = scene.textures.createCanvas(outKey+'_canvas', src.width, src.height);
+    var ctx = canvasTex.getContext();
+    ctx.drawImage(src, 0, 0);
+
+    var imgData = ctx.getImageData(0, 0, src.width, src.height);
+    var data = imgData.data;
+
+    for (var i=0; i<data.length; i+=4){
+      var r=data[i], g=data[i+1], b=data[i+2];
+      if (Math.abs(r-KEY_R)<=KEY_TOL && Math.abs(g-KEY_G)<=KEY_TOL && Math.abs(b-KEY_B)<=KEY_TOL){
+        data[i+3] = 0; // make transparent
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    canvasTex.refresh();
+
+    // Register a proper spritesheet from the processed canvas
+    // (Phaser accepts a canvas/image source here)
+    scene.textures.addSpriteSheet(outKey, canvasTex.getSourceImage(), {
+      frameWidth: FRAME_W, frameHeight: FRAME_H,
+      margin: SHEET_MARGIN, spacing: SHEET_SPACING
+    });
+
+    // We no longer need the raw or canvas intermediates in the texture manager
+    scene.textures.remove(rawKey);
+    scene.textures.remove(outKey+'_canvas');
+
+    LOG('Usagi: purple background removed; spritesheet registered.');
+    return true;
+  }
+
   // ---------- Phaser: create ----------
   function create(){
     var w=this.scale.width, h=this.scale.height;
 
     // Background
-    if (this.textures.exists('bg')) {
+    if(this.textures.exists('bg')){
       var bg=this.add.image(0,0,'bg').setOrigin(0); bg.setDisplaySize(w,h);
       this.scale.on('resize',function(sz){ var W=sz.width,H=sz.height; try{this.cameras.resize(W,H);}catch(e){} bg.setDisplaySize(W,H); },this);
     }
+
+    // Create processed spritesheet from raw image
+    var ok = createSpritesheetFromImage(this, 'usagi_raw', 'usagi');
+    if(!ok){ LOG('ERROR: could not build Usagi sheet — check file path and dimensions.'); }
 
     // Ground (invisible static)
     S.groundY = h - 110;
@@ -114,47 +147,44 @@
     this.physics.add.existing(groundRect, true);
     S.ground = groundRect;
 
-    // Player (image vs spritesheet)
-    if (USAGI.isSheet) {
-      // Create animations from the sheet
-      this.anims.create({ key:'idle',   frames:[{ key:'usagi', frame:1 }], frameRate:1, repeat:-1 });
-      this.anims.create({ key:'walk',   frames:this.anims.generateFrameNumbers('usagi',{start:0,end:Math.min(2,USAGI.columns*USAGI.rows-1)}), frameRate:10, repeat:-1 });
-      // If you have attack frames, set the correct ranges here:
-      this.anims.create({ key:'attack', frames:this.anims.generateFrameNumbers('usagi',{start:3,end:5}), frameRate:14, repeat:0 });
+    // Animations — 3×3 grid frames 0..8
+    // Row 1: 0,1,2 (idle/walk), Row 2: 3,4,5 (attack), Row 3: 6,7,8 (heavy)
+    this.anims.create({ key:'idle',   frames:[{ key:'usagi', frame:1 }], frameRate:1,  repeat:-1 });
+    this.anims.create({ key:'walk',   frames:this.anims.generateFrameNumbers('usagi',{start:0,end:2}), frameRate:10, repeat:-1 });
+    this.anims.create({ key:'attack', frames:this.anims.generateFrameNumbers('usagi',{start:3,end:5}), frameRate:14, repeat:0  });
+    this.anims.create({ key:'heavy',  frames:this.anims.generateFrameNumbers('usagi',{start:6,end:8}), frameRate:12, repeat:0  });
 
-      S.player = this.physics.add.sprite(120, S.groundY, 'usagi', 1).setCollideWorldBounds(true);
+    // Player
+    S.player = this.physics.add.sprite(120, S.groundY, 'usagi', 1).setCollideWorldBounds(true);
+    var targetH=128, scale=targetH/FRAME_H; S.player.setScale(scale);
 
-      // Scale tall frames down (assuming SNES-like 256×384 frames)
-      var targetH = 128, scale = targetH / (USAGI.frameHeight||384);
-      S.player.setScale(scale);
+    // Tight body & offset so feet sit on baseline
+    var bodyW=36, bodyH=68;
+    S.player.body.setSize(bodyW, bodyH);
+    var offX=((FRAME_W*scale)-bodyW)/2/scale;
+    var offY=((FRAME_H*scale)-bodyH-4)/scale;
+    S.player.body.setOffset(offX, offY);
 
-      // Tight hitbox & offset (tweak if your art differs)
-      var bodyW=32, bodyH=64;
-      S.player.body.setSize(bodyW, bodyH);
-      var offX=((USAGI.frameWidth*scale)-bodyW)/2/scale;
-      var offY=((USAGI.frameHeight*scale)-bodyH-4)/scale;
-      S.player.body.setOffset(offX, offY);
-
-      S.player.setOrigin(0.5,1);
-      S.player.play('idle');
-    } else {
-      // Single-frame image: show as a sprite and simulate "idle"
-      S.player = this.physics.add.image(120, S.groundY, 'usagi').setCollideWorldBounds(true);
-      // Scale to ~64–96 px tall (your debug image is already 64×64, so leave as-is)
-      S.player.setOrigin(0.5,1);
-      // Give it a reasonable body
-      S.player.body.setSize(32, 40);
-      S.player.body.setOffset(16, 24);
-    }
+    S.player.setOrigin(0.5,1);
+    S.player.play('idle');
+    S.player.isAttacking=false;
 
     this.physics.add.collider(S.player, S.ground);
 
+    // Return to idle after attacks
+    this.anims.on('complete', function(anim, spr){
+      if(spr===S.player && (anim.key==='attack' || anim.key==='heavy')){
+        S.player.isAttacking=false;
+        S.player.play('idle');
+      }
+    }, this);
+
     // Input
     S.cursors=this.input.keyboard.createCursorKeys();
-    this.input.keyboard.on('keydown-SPACE', function(){ tryAttack(this); }.bind(this));
+    this.input.keyboard.on('keydown-SPACE', function(){ tryAttack(); }, this);
 
-    // Attack hitbox (sensor) — works for both image and sheet versions
-    S.attackHit = this.add.rectangle(0,0, 50, 40, 0xff0000, 0);
+    // Attack hitbox (sensor)
+    S.attackHit = this.add.rectangle(0,0, 56, 44, 0xff0000, 0);
     this.physics.add.existing(S.attackHit, false);
     S.attackHit.body.setAllowGravity(false);
     S.attackHit.body.setEnable(false);
@@ -165,13 +195,13 @@
 
     // Overlap: attack sensor vs enemies
     this.physics.add.overlap(S.attackHit, function(){ return S.enemies; }, function(hit, enemy){
-      enemy.setVelocityX(-200);
+      enemy.setVelocityX(-220);
       enemy.setTint(0xffaaaa);
-      setTimeout(function(){ if(enemy && enemy.clearTint) enemy.clearTint(); }, 200);
+      setTimeout(function(){ if(enemy && enemy.clearTint) enemy.clearTint(); }, 220);
     }, null, this);
 
     spawnEnemy(this);
-    this.time.addEvent({ delay:1800, loop:true, callback:function(){ spawnEnemy(this); }, callbackScope:this });
+    this.time.addEvent({ delay:1700, loop:true, callback:function(){ spawnEnemy(this); }, callbackScope:this });
   }
 
   // ---------- Phaser: update ----------
@@ -183,26 +213,30 @@
     var jump =(S.cursors&&S.cursors.up.isDown)||S.touch.jump;
     var atk  =S.touch.attack;
 
-    p.setVelocityX(0);
-    if(left){  p.setVelocityX(-180); if(p.flipX!==undefined) p.flipX=true;  }
-    else if(right){ p.setVelocityX(180); if(p.flipX!==undefined) p.flipX=false; }
+    if(!p.isAttacking){
+      p.setVelocityX(0);
+      if(left){  p.setVelocityX(-180); p.flipX=true;  p.play('walk',true); }
+      else if(right){ p.setVelocityX(180); p.flipX=false; p.play('walk',true); }
+      else { p.play('idle',true); }
+    }
 
     if(jump && p.body.blocked.down){ p.setVelocityY(-420); }
-    if(atk){ tryAttack(this); }
+    if(atk){ tryAttack(); }
 
     S.enemies.children.iterate(function(e){ if(e && e.x < -e.width) e.destroy(); });
   }
 
   // ---------- attack ----------
-  function tryAttack(scene){
+  function tryAttack(){
     if(!S.canAttack || !S.player) return;
     S.canAttack=false;
+    S.player.isAttacking=true;
+    S.player.play('attack', true);
     setTimeout(function(){ S.canAttack=true; }, 250);
 
-    // Position the sensor in front of Usagi for ~200ms
-    var dir = (S.player.flipX===true) ? -1 : 1;
-    var px  = S.player.x + (34 * dir);
-    var py  = S.player.y - 28;
+    var dir = S.player.flipX ? -1 : 1;
+    var px  = S.player.x + (40 * dir);
+    var py  = S.player.y - 30;
     S.attackHit.setPosition(px, py);
     if(S.attackHit.body){ S.attackHit.body.setEnable(true); }
     setTimeout(function(){ if(S.attackHit && S.attackHit.body) S.attackHit.body.setEnable(false); }, 200);
@@ -226,7 +260,7 @@
     e.body.setAllowGravity(true);
   }
 
-  // ---------- boot after DOM ready ----------
+  // ---------- boot ----------
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded', function(){ wireTouchButtons(); armStart(); });
   } else {
