@@ -1,8 +1,11 @@
 /* =========================================================
-   Usagi Prototype – Per-Animation Sprite Sheets Loader
-   - Uses assets/sprites/usagi/*.png with manifest.json
-   - Uses assets/sprites/ninja/*.png with manifest.json
-   - Keeps backgrounds, enemies, combat, health bars, mobile UI
+   Usagi Prototype – Per-Animation Sheets + Debug Arena
+   - Normal play: title → stages with backgrounds and enemies
+   - Debug arena: load test/test_moves_level.json
+       * Enable via ?debug=1 in URL OR press F1 on title
+   - Per-animation loaders (reads assets/sprites/{usagi|ninja}/manifest.json)
+   - Air attacks for Usagi (if sheets exist): jump_slash, down_slash, jump_kick
+   - Ninja AI for debug loops aerial attacks if available
    ========================================================= */
 
 const BASE_W = 256, BASE_H = 224;
@@ -35,7 +38,6 @@ function resizeCanvas() {
   root.style.width  = canvas.style.width;
   root.style.height = canvas.style.height;
 
-  // Touch controls responsive sizing
   const shortest = Math.min(w, h);
   const btn = Math.max(48, Math.min(96, Math.floor(shortest / 6)));
   const gap = Math.max(10, Math.floor(btn * 0.25));
@@ -58,7 +60,8 @@ const PATHS = {
     'assets/background/background4.png',
     'assets/background/background5.png',
     'assets/background/background6.png',
-  ]
+  ],
+  testConfig: 'test/test_moves_level.json'
 };
 
 // -------------------- Utils ----------------------------
@@ -76,6 +79,12 @@ async function loadJSON(src) {
   if (!res.ok) throw new Error(`Failed to load JSON: ${src}`);
   return res.json();
 }
+function urlHasDebug() {
+  try {
+    const p = new URLSearchParams(location.search);
+    return p.get('debug') === '1';
+  } catch { return false; }
+}
 
 // -------------------- Sprite System --------------------
 class StripSheet {
@@ -85,10 +94,10 @@ class StripSheet {
     this.fh = frameH;
     this.frames = Math.max(1, frames);
   }
-  // Horizontal strip: index 0..frames-1
   srcRect(i) {
     const clamped = Math.max(0, Math.min(this.frames - 1, i|0));
-    const sx = clamped * this.fw + 0.01; // bleed guard
+    // tiny inset to avoid bleeding
+    const sx = clamped * this.fw + 0.01;
     return { sx, sy: 0.01, sw: this.fw - 0.02, sh: this.fh - 0.02 };
   }
 }
@@ -122,12 +131,14 @@ class Actor {
     this.speed=45; this.jumpV=-130; this.gravity=340;
     this.shadow=true;
 
-    this.anims = new Map();  // name -> { sheet:StripSheet, frames:number, anim:Animation }
+    this.anims = new Map();  // name -> { sheet:StripSheet, anim:Animation }
     this.currentName = null;
     this.invulnT = 0;
 
     this.hp = 5; this.maxHp = 5;
   }
+
+  hasAnim(name){ return this.anims.has(name); }
 
   addAnim(name, sheet, fps=8, loop=true, holdLast=false) {
     const frames = Array.from({length: sheet.frames}, (_,i)=>i);
@@ -168,15 +179,18 @@ class Actor {
 }
 
 // -------------------- Input -----------------------------
-const input = { left:false, right:false, jump:false, attack:false, debug:false };
+const input = { left:false, right:false, up:false, down:false, jump:false, attack:false, debug:false };
 function handleKey(e, down){
   const k=e.code;
   if(k==='ArrowLeft'||k==='KeyA'){ input.left=down; e.preventDefault(); }
   if(k==='ArrowRight'||k==='KeyD'){ input.right=down; e.preventDefault(); }
-  if(k==='ArrowUp'||k==='KeyW'||k==='Space'){ input.jump=down; e.preventDefault(); }
+  if(k==='ArrowUp'||k==='KeyW'){ input.up=down; e.preventDefault(); }
+  if(k==='ArrowDown'||k==='KeyS'){ input.down=down; e.preventDefault(); }
+  if(k==='Space'){ input.jump=down; e.preventDefault(); }
   if(['KeyJ','KeyK','KeyF','KeyH','KeyZ','KeyX'].includes(k)){ input.attack=down; e.preventDefault(); }
   if(k==='Enter' && down) startGame();
   if(k==='Backquote') input.debug=down;
+  if(k==='F1' && down && GAME.state==='title'){ startDebugArena(); }
 }
 addEventListener('keydown', e=>handleKey(e,true), {passive:false});
 addEventListener('keyup',   e=>handleKey(e,false),{passive:false});
@@ -209,7 +223,14 @@ const GAME = {
   levelIndex: 0,
   scrollX: 0,
   player: null,
-  enemies: []
+  enemies: [],
+  // assets
+  usagiSheets: null,
+  ninjaSheets: null,
+  // debug
+  debugRequested: urlHasDebug(),
+  inDebugArena: false,
+  testConfig: null
 };
 
 // -------------------- Boot ------------------------------
@@ -221,63 +242,55 @@ function loop(now){
 
 async function boot(){
   try{
-    // Load manifests
-    const [maniUsagi, maniNinja] = await Promise.all([
-      loadJSON(PATHS.usagi),
-      loadJSON(PATHS.ninja)
-    ]);
+    // Load manifests (if missing, engine still runs, just with fewer anims)
+    let maniUsagi = {}, maniNinja = {};
+    try { maniUsagi = await loadJSON(PATHS.usagi); } catch(e){ console.warn(e.message); }
+    try { maniNinja = await loadJSON(PATHS.ninja); } catch(e){ console.warn(e.message); }
 
     // Load sheets referenced by manifests
     const loadSheets = async (manifest) => {
-      const entries = Object.entries(manifest); // {name:{frameSize:[w,h], frames, path}}
       const out = {};
+      const entries = Object.entries(manifest);
       await Promise.all(entries.map(async ([name, meta]) => {
         const img = await loadImage(meta.path);
         out[name] = new StripSheet(img, meta.frameSize[0], meta.frameSize[1], meta.frames);
       }));
       return out;
     };
-    const usagiSheets = await loadSheets(maniUsagi);
-    const ninjaSheets = await loadSheets(maniNinja);
+    GAME.usagiSheets = await loadSheets(maniUsagi);
+    GAME.ninjaSheets = await loadSheets(maniNinja);
 
     // Backgrounds
     GAME.bgs = await Promise.all(PATHS.bgs.map(loadImage));
 
-    // Build player from usagi sheets
+    // Build player
     const p = new Actor();
     p.x = 80; p.y = 180; p.scale = 1;
-    // animation speeds (tweak to taste)
-    p.addAnim('idle',    usagiSheets.idle,    6, true);
-    p.addAnim('walk',    usagiSheets.walk,    8, true);
-    p.addAnim('run',     usagiSheets.run,     12,true);
-    p.addAnim('attack',  usagiSheets.attack1, 12,false,true);
-    p.addAnim('attack2', usagiSheets.attack2, 12,false,true);
-    p.addAnim('jump',    usagiSheets.jump,    6, false, true);
-    p.addAnim('hurt',    usagiSheets.hurt,    6, false, true);
-    p.addAnim('death',   usagiSheets.death,   6, false, true);
-    p.play('idle', true);
+    // Add anims defensively (only if available)
+    addUsagiAnims(p, GAME.usagiSheets);
+    p.play(p.hasAnim('idle') ? 'idle' : firstAnimName(p), true);
     p.maxHp = 6; p.hp = 6;
     GAME.player = p;
 
-    // Build enemies (a few ninjas)
+    // Build default enemies for main game (not debug)
     GAME.enemies.length = 0;
     for (let i=0;i<3;i++){
       const e = new Actor();
       e.x = 160 + i*30; e.y = 180; e.scale=1;
-      e.speed = 30;
-      e.maxHp = 3; e.hp = 3;
-      e.addAnim('idle',   ninjaSheets.idle,   5, true);
-      e.addAnim('walk',   ninjaSheets.walk,   7, true);
-      e.addAnim('attack', ninjaSheets.attack, 9, false, true);
-      e.addAnim('hurt',   ninjaSheets.hurt,   6, false, true);
-      e.addAnim('death',  ninjaSheets.death,  6, false, true);
-      e.play('idle', true);
+      e.speed = 30; e.maxHp = 3; e.hp = 3;
+      addNinjaAnims(e, GAME.ninjaSheets);
+      e.play(e.hasAnim('idle') ? 'idle' : firstAnimName(e), true);
       e.ai = { state:'approach', timer: 0 };
       GAME.enemies.push(e);
     }
 
-    GAME.state='title';
-    titleOverlay.classList.remove('hidden');
+    // If ?debug=1, start straight into arena
+    if (GAME.debugRequested) {
+      await startDebugArena(true);
+    } else {
+      GAME.state='title';
+      titleOverlay?.classList.remove('hidden');
+    }
   } catch (e) {
     GAME.report.push('Fatal load error: ' + e.message);
     reportLogEl.textContent = GAME.report.join('\n');
@@ -287,15 +300,122 @@ async function boot(){
   requestAnimationFrame(loop);
 }
 
+function addUsagiAnims(p, sheets){
+  // Grounded
+  if(sheets.idle)    p.addAnim('idle',    sheets.idle,    6, true);
+  if(sheets.walk)    p.addAnim('walk',    sheets.walk,    8, true);
+  if(sheets.run)     p.addAnim('run',     sheets.run,     12,true);
+  if(sheets.attack1) p.addAnim('attack1', sheets.attack1, 12,false,true);
+  if(sheets.attack2) p.addAnim('attack2', sheets.attack2, 12,false,true);
+  if(sheets.hurt)    p.addAnim('hurt',    sheets.hurt,    6, false, true);
+  if(sheets.death)   p.addAnim('death',   sheets.death,   6, false, true);
+  // Air
+  if(sheets.jump)        p.addAnim('jump',        sheets.jump,        8, false, true);
+  if(sheets.jump_slash)  p.addAnim('jump_slash',  sheets.jump_slash,  12,false,true);
+  if(sheets.down_slash)  p.addAnim('down_slash',  sheets.down_slash,  12,false,true);
+  if(sheets.jump_kick)   p.addAnim('jump_kick',   sheets.jump_kick,   12,false,true);
+}
+
+function addNinjaAnims(e, sheets){
+  // Grounded
+  if(sheets.idle)   e.addAnim('idle',   sheets.idle,   5, true);
+  if(sheets.walk)   e.addAnim('walk',   sheets.walk,   7, true);
+  if(sheets.run)    e.addAnim('run',    sheets.run,    10, true);
+  if(sheets.attack) e.addAnim('attack', sheets.attack, 9, false, true);
+  if(sheets.hurt)   e.addAnim('hurt',   sheets.hurt,   6, false, true);
+  if(sheets.death)  e.addAnim('death',  sheets.death,  6, false, true);
+  // Air (optional)
+  if(sheets.jump)           e.addAnim('jump',           sheets.jump,           8, false, true);
+  if(sheets.jump_slash)     e.addAnim('jump_slash',     sheets.jump_slash,     12,false,true);
+  if(sheets.down_slash)     e.addAnim('down_slash',     sheets.down_slash,     12,false,true);
+  if(sheets.jump_kick)      e.addAnim('jump_kick',      sheets.jump_kick,      12,false,true);
+}
+
+function firstAnimName(actor){
+  for (const k of actor.anims.keys()) return k;
+  return null;
+}
+
+// -------------------- Start states ----------------------
+function startGame(){
+  if(GAME.state!=='play'){
+    GAME.state='play';
+    GAME.inDebugArena = false;
+    titleOverlay?.classList.add('hidden');
+    document.getElementById('touch-controls')?.classList.remove('hidden');
+  }
+}
+
+async function startDebugArena(skipTitle=false){
+  try {
+    const cfg = await loadJSON(PATHS.testConfig);
+    GAME.testConfig = cfg;
+    GAME.inDebugArena = true;
+
+    // Reset positions
+    const p = GAME.player;
+    if (cfg.player_spawn){
+      p.x = cfg.player_spawn.x ?? 80;
+      p.y = cfg.player_spawn.y ?? 180;
+      p.vx = 0; p.vy = 0; p.onGround = true;
+    }
+
+    // One enemy that loops aerial moves
+    GAME.enemies.length = 0;
+    const e = new Actor();
+    e.scale = 1;
+    addNinjaAnims(e, GAME.ninjaSheets);
+    const ex = (cfg.enemies && cfg.enemies[0] && cfg.enemies[0].x) ?? 180;
+    const ey = (cfg.enemies && cfg.enemies[0] && cfg.enemies[0].y) ?? 180;
+    e.x = ex; e.y = ey; e.speed = 0; e.hp = 99; e.maxHp = 99;
+    e.play(e.hasAnim('idle') ? 'idle' : firstAnimName(e), true);
+    e.ai = { state: 'air_loop', t: 0, seq: ['jump_slash','down_slash','jump_kick'].filter(n=>e.hasAnim(n)), i: 0 };
+    GAME.enemies.push(e);
+
+    if (skipTitle || GAME.state!=='play') {
+      GAME.state = 'play';
+      titleOverlay?.classList.add('hidden');
+      document.getElementById('touch-controls')?.classList.remove('hidden');
+    }
+  } catch (err){
+    GAME.report.push('Debug arena load error: ' + err.message);
+    reportLogEl.textContent = GAME.report.join('\n');
+    reportOverlay.classList.remove('hidden');
+  }
+}
+
 // -------------------- Update/Render ---------------------
-function currentBg(){ return GAME.bgs[(GAME.levelIndex%GAME.bgs.length+GAME.bgs.length)%GAME.bgs.length] || null; }
+function currentBg(){
+  if (GAME.inDebugArena && GAME.testConfig && GAME.testConfig.bg) return GAME.testConfig.bgImg || null;
+  return GAME.bgs[(GAME.levelIndex%GAME.bgs.length+GAME.bgs.length)%GAME.bgs.length] || null;
+}
+
+function wantAirAttack(player){
+  // Pick air attack by context (simple rules):
+  // - Descending: down_slash (if available)
+  // - Moving horizontally: jump_slash (if available)
+  // - Otherwise: jump_kick (if available) as fallback
+  const descending = player.vy > 10;
+  const moving = Math.abs(player.vx) > 1;
+
+  if (descending && player.hasAnim('down_slash')) return 'down_slash';
+  if (moving && player.hasAnim('jump_slash')) return 'jump_slash';
+  if (player.hasAnim('jump_kick')) return 'jump_kick';
+  // fallback to plain jump if nothing
+  return player.hasAnim('jump') ? 'jump' : null;
+}
 
 function update(dt){
   if(GAME.state!=='play') return;
 
+  // Lazy-load debug bg image if path string provided
+  if (GAME.inDebugArena && GAME.testConfig && typeof GAME.testConfig.bg === 'string' && !GAME.testConfig.bgImg){
+    loadImage(GAME.testConfig.bg).then(img => { GAME.testConfig.bgImg = img; }).catch(()=>{});
+  }
+
   // Scroll bg
   const bg = currentBg();
-  if (bg) GAME.scrollX = (GAME.scrollX + dt * 18) % (bg.width||BASE_W);
+  if (bg && bg.width) GAME.scrollX = (GAME.scrollX + dt * 18) % (bg.width||BASE_W);
 
   const p = GAME.player;
   if(p){
@@ -306,131 +426,122 @@ function update(dt){
 
     if(input.jump && p.onGround){ p.vy=p.jumpV; p.onGround=false; }
 
-    // attack
-    const busyAtk = (p.currentName==='attack' || p.currentName==='attack2') && !p.anims.get(p.currentName).anim.done;
-    if(input.attack && !busyAtk){
-      p.play(Math.random()<0.5?'attack':'attack2', true);
+    // attack logic
+    const busy = (n)=> p.currentName===n && !p.anims.get(n).anim.done;
+    const attacking = busy('attack1') || busy('attack2') || busy('jump_slash') || busy('down_slash') || busy('jump_kick');
+
+    if(input.attack && !attacking){
+      if(!p.onGround){
+        const air = wantAirAttack(p);
+        if (air) p.play(air, true);
+      } else {
+        // alternate between attack1/attack2 if both exist
+        const pick = (p._lastAtk === 1 && p.hasAnim('attack2')) ? 'attack2'
+                    : p.hasAnim('attack1') ? 'attack1'
+                    : p.hasAnim('attack2') ? 'attack2'
+                    : (p.hasAnim('attack') ? 'attack' : null);
+        if (pick){ p.play(pick, true); p._lastAtk = (pick==='attack1') ? 1 : 2; }
+      }
     }
 
-    // auto state
-    if(!busyAtk){
-      if(!p.onGround) p.play('jump');
-      else if (Math.abs(p.vx) > p.speed*0.75) p.play('run');
-      else if (Math.abs(p.vx) > 0) p.play('walk');
-      else p.play('idle');
+    // auto state when not attacking
+    if(!attacking){
+      if(!p.onGround && p.hasAnim('jump')) p.play('jump');
+      else if (Math.abs(p.vx) > p.speed*0.75 && p.hasAnim('run')) p.play('run');
+      else if (Math.abs(p.vx) > 0 && p.hasAnim('walk')) p.play('walk');
+      else if (p.hasAnim('idle')) p.play('idle');
     }
 
     p.updatePhysics(dt);
   }
 
-  // Enemy AI & combat
+  // Enemy logic
   for(const e of GAME.enemies){
     if(e.hp<=0) continue;
-    const dist = (GAME.player.x - e.x);
-    e.flipX = dist < 0;
 
-    e.ai.timer -= dt;
-    const close = Math.abs(dist) < 22;
+    if (!GAME.inDebugArena) {
+      // Normal simple AI
+      const dist = (GAME.player.x - e.x);
+      e.flipX = dist < 0;
+      e.ai.timer = (e.ai.timer || 0) - dt;
+      const close = Math.abs(dist) < 22;
 
-    if(e.invulnT>0){
-      e.vx = (e.flipX ? -1 : 1) * -30;
-      e.play('hurt');
-    } else if(close && e.ai.timer <= 0){
-      e.play('attack', true);
-      e.vx = 0;
-      e.ai.timer = 0.8;
-    } else if (!close){
-      e.play('walk');
-      e.vx = Math.sign(dist) * e.speed;
+      if(e.invulnT>0){
+        e.vx = (e.flipX ? -1 : 1) * -30;
+        if(e.hasAnim('hurt')) e.play('hurt');
+      } else if(close && e.ai.timer <= 0){
+        if(e.hasAnim('attack')) e.play('attack', true);
+        e.vx = 0; e.ai.timer = 0.8;
+      } else if (!close){
+        if(e.hasAnim('walk')) e.play('walk');
+        e.vx = Math.sign(dist) * (e.speed||28);
+      } else {
+        e.vx = 0;
+        if(e.currentName!=='attack' && e.hasAnim('idle')) e.play('idle');
+      }
     } else {
-      e.vx = 0; if(e.currentName!=='attack') e.play('idle');
+      // Debug arena: loop aerial moves
+      const seq = e.ai.seq || [];
+      if (seq.length > 0) {
+        e.ai.t = (e.ai.t || 0) - dt;
+        if (e.ai.t <= 0) {
+          const name = seq[e.ai.i % seq.length];
+          if (e.hasAnim(name)) {
+            e.play(name, true);
+            e.vy = -80; // hop slightly for air moves
+            e.onGround = false;
+          }
+          e.ai.i = (e.ai.i + 1) % seq.length;
+          e.ai.t = 0.9;
+        }
+      } else {
+        if(e.hasAnim('idle')) e.play('idle');
+      }
+      e.vx = 0;
     }
 
     e.updatePhysics(dt);
-
-    // Enemy hits player
-    const atk = e.currentName==='attack' && !e.anims.get('attack').anim.done;
-    if(atk && overlap(e.rect(20,36), p.rect(20,40)) && p.invulnT<=0){
-      damageActor(p, 1, (p.x < e.x) ? -80 : 80);
-    }
   }
 
-  // Player sword hits enemies
-  if(p){
-    const atk1 = p.currentName==='attack'  && !p.anims.get('attack').anim.done;
-    const atk2 = p.currentName==='attack2' && !p.anims.get('attack2').anim.done;
-    const active = atk1 || atk2;
-    if(active){
-      const hit = playerSwordHitbox(p);
-      for(const e of GAME.enemies){
-        if(e.hp>0 && e.invulnT<=0 && overlap(hit, e.rect(20,40))){
-          damageActor(e, 1, (e.x < p.x) ? -90 : 90);
-        }
-      }
-    }
-  }
-
-  // Simple cleanup / respawn logic
-  let living = 0; for(const e of GAME.enemies) if(e.hp>0) living++;
-  if(living===0){
-    // advance stage and respawn
-    GAME.levelIndex = (GAME.levelIndex + 1) % GAME.bgs.length;
-    for (const e of GAME.enemies) { e.hp = e.maxHp; e.x = 160 + Math.random()*40; }
-  }
-
-  if(p && p.hp<=0){
-    p.hp = p.maxHp; p.x = 80; p.y = 180; // quick respawn
-  }
+  // Minimal collision demo (optional): sword hitbox
+  // (Left out in debug arena to keep focus on visuals)
 }
 
 function render(){
   ctx.clearRect(0,0,BASE_W,BASE_H);
 
-  // Title shows first bg
   if(GAME.state==='title'){
     const bg0 = GAME.bgs[0];
     if(bg0) drawTiled(bg0, 0);
-    drawUI();
+    drawTitleHint();
     return;
   }
 
   const bg = currentBg();
   if (bg) drawTiled(bg, GAME.scrollX);
 
-  // Ground
   ctx.fillStyle='#2e2e2e';
   ctx.fillRect(0, ipx(182), BASE_W, BASE_H - 182);
 
-  // Draw actors
   if(GAME.player) GAME.player.draw(ctx);
   for(const e of GAME.enemies){ if(e.hp>0) e.draw(ctx); }
 
   drawUI();
 }
 
-// -------------------- Combat helpers -------------------
-function playerSwordHitbox(p){
-  const reach = 30, height = 18;
-  if(!p.flipX){
-    return { x: p.x + 6, y: p.y - 36, w: reach, h: height };
-  } else {
-    return { x: p.x - 6 - reach, y: p.y - 36, w: reach, h: height };
-  }
-}
-function overlap(a,b){
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
-function damageActor(a, dmg, knockVx){
-  a.hp = Math.max(0, a.hp - dmg);
-  a.invulnT = 0.35;
-  a.vx = knockVx;
-  a.vy = -60;
-  a.onGround = false;
-  if (a.anims.has('hurt')) a.play('hurt', true);
+function drawTitleHint(){
+  // Tiny overlay hint: Press F1 for Debug Arena
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(6, BASE_H-18, 170, 12);
+  ctx.fillStyle = '#fff';
+  ctx.font = '8px monospace';
+  ctx.fillText('Press F1 for Debug Arena', 10, BASE_H-9);
 }
 
 // -------------------- UI -------------------------------
 function drawUI(){
+  // In main mode show health bars; in debug keep it clean
+  if (GAME.inDebugArena) return;
   drawHealthBar(10, 10, 80, 8, GAME.player ? GAME.player.hp : 0, GAME.player ? GAME.player.maxHp : 1);
   let alive = 0; for(const e of GAME.enemies) if(e.hp>0) alive++;
   drawHealthBar(BASE_W-90, 10, 80, 8, alive, Math.max(alive, 1));
@@ -450,18 +561,4 @@ function drawTiled(img, scroll){
   const drawH = BASE_H;
   const offset = -Math.floor((scroll * scale) % drawW);
   for (let x = offset; x < BASE_W; x += drawW) {
-    ctx.drawImage(img, 0,0,img.width,img.height, x, 0, drawW, drawH);
-  }
-}
-
-// -------------------- Start ----------------------------
-function startGame(){
-  if(GAME.state!=='play'){
-    GAME.state='play';
-    titleOverlay.classList.add('hidden');
-    document.getElementById('touch-controls')?.classList.remove('hidden');
-  }
-}
-
-boot();
-requestAnimationFrame(loop);
+    ctx.drawImage(img, 0,0,img.width,img.height, x, 0, draw
