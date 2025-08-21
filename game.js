@@ -1,9 +1,10 @@
 /* =========================================================
-   Usagi Prototype – Mobile start + Loader + Debug HUD
-   - Loads backgrounds from assets/background/
-   - Loads sprite sheets via manifests
-   - On-screen HUD log for mobile debugging
-   - Touch controls + simple AI
+   Usagi Prototype – Distinct Manifests + Mobile + Debug HUD
+   - Manifests:
+       assets/sprites/usagi/manifest.usagi.json
+       assets/sprites/ninja/manifest.ninja.json
+   - Touch-friendly Start
+   - Loads backgrounds and sprite sheets
    ========================================================= */
 document.addEventListener('DOMContentLoaded', () => {
   const BASE_W = 256, BASE_H = 224;
@@ -17,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const report = document.getElementById('load-report');
   const hudLog = document.getElementById('hud-log');
 
-  const log = (...a)=>{ const s=a.join(' '); console.log(s); hudLog.textContent = (hudLog.textContent+'\n'+s).trim().slice(-800); };
+  const log = (...a)=>{ const s=a.join(' '); console.log(s); hudLog.textContent = (hudLog.textContent+'\n'+s).trim().slice(-900); };
 
   // probe CSS
   report.textContent = `CSS: ${getComputedStyle(document.body).backgroundColor} • JS: OK`;
@@ -49,10 +50,10 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas();
 
-  // paths
+  // paths (UPDATED manifest names)
   const PATHS = {
-    usagi:  'assets/sprites/usagi/manifest.json',
-    ninja:  'assets/sprites/ninja/manifest.json',
+    usagi:  'assets/sprites/usagi/manifest.usagi.json',
+    ninja:  'assets/sprites/ninja/manifest.ninja.json',
     bgs: [
       'assets/background/background1.png',
       'assets/background/background2.png',
@@ -105,10 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if(this.current) this.anims.get(this.current).anim.update(dt);
     }
     draw(ctx){
-      if(!this.current){ // fallback placeholder
-        ctx.fillStyle='#7cf'; ctx.fillRect(this.x-8, this.y-28, 16, 28);
-        return;
-      }
+      if(!this.current){ ctx.fillStyle='#7cf'; ctx.fillRect(this.x-8, this.y-28, 16, 28); return; }
       const {sheet, anim} = this.anims.get(this.current);
       const f = anim.cur(); const r = sheet.srcRect(f);
       const dw=sheet.fw*this.scale, dh=sheet.fh*this.scale;
@@ -175,19 +173,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     log('BGs loaded:', bgs.filter(Boolean).length, '/', PATHS.bgs.length);
 
-    // manifests
+    // manifests (UPDATED filenames)
     const maniUsagi = await loadJSON(PATHS.usagi);
     const maniNinja = await loadJSON(PATHS.ninja);
 
     async function loadSheets(manifest, bucket){
-      if(!manifest){ log('No manifest for', bucket); return; }
-      const entries = Object.entries(manifest);
-      for (const [name, meta] of entries) {
+      if(!manifest){ log('No manifest for bucket', bucket===sheets.usagi?'usagi':'ninja'); return; }
+      for (const [name, meta] of Object.entries(manifest)) {
         const imgRes = await loadImage(meta.path);
         if (imgRes.ok) {
           bucket[name] = new StripSheet(imgRes.img, meta.frameSize[0], meta.frameSize[1], meta.frames);
         } else {
-          log('Missing image for', bucket, name, meta.path);
+          log('Missing image:', meta.path);
         }
       }
       log('Loaded', Object.keys(bucket).length, 'anims for', bucket===sheets.usagi?'usagi':'ninja');
@@ -218,13 +215,11 @@ document.addEventListener('DOMContentLoaded', () => {
   requestAnimationFrame(loop);
 
   function update(dt){
-    // movement
     if(input.left){ player.vx = -player.speed; player.flip = true; } else
     if(input.right){ player.vx =  player.speed; player.flip = false; } else player.vx = 0;
 
     if(input.jump && player.onGround){ player.vy = player.jumpV; player.onGround=false; }
 
-    // choose anims if present
     const busy = player.current && !player.anims.get(player.current).anim.loop;
     if(input.attack && player.has('attack1') && !busy){ player.play('attack1', true); }
     if(!busy){
@@ -243,14 +238,13 @@ document.addEventListener('DOMContentLoaded', () => {
       e.update(dt);
     }
 
-    // scroll bg
-    if (bgs[0] && bgs[0].width) scrollX = (scrollX + dt * 18) % (bgs[0].width||BASE_W);
+    const bg0 = bgs[0];
+    if (bg0 && bg0.width) scrollX = (scrollX + dt * 18) % (bg0.width||BASE_W);
   }
 
   function render(){
     ctx.clearRect(0,0,BASE_W,BASE_H);
 
-    // BG
     const bg = bgs[0];
     if(bg){
       const scale = BASE_H / bg.height;
@@ -260,10 +254,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       ctx.fillStyle='#203529'; ctx.fillRect(0,0,BASE_W,BASE_H);
     }
-    // ground strip
     ctx.fillStyle='#2e2e2e'; ctx.fillRect(0, 182, BASE_W, BASE_H-182);
 
-    // draw
     player.draw(ctx);
     enemies.forEach(e=>e.draw(ctx));
   }
