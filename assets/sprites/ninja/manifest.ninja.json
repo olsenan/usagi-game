@@ -1,6 +1,0 @@
-{
-  "idle":   { "frameSize": [128, 128], "frames": 4, "path": "assets/sprites/ninja/idle.png" },
-  "walk":   { "frameSize": [128, 128], "frames": 6, "path": "assets/sprites/ninja/walk.png" },
-  "run":    { "frameSize": [128, 128], "frames": 6, "path": "assets/sprites/ninja/run.png" },
-  "attack": { "frameSize": [128, 128], "frames": 5, "path": "assets/sprites/ninja/attack.png" }
-}

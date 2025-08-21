@@ -1,3 +1,0 @@
-Usagi Game Assets (SNES-style)
-characters/usagi_walk.png - Usagi Yojimbo walk/attack cycle
-characters/ninja_walk.png - Ninja enemy walk/attack cycle
