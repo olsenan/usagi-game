@@ -1,4 +1,9 @@
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+  /* JS sets these at runtime based on canvas size */
+  --btn: 64px;   /* button size */
+  --gap: 16px;   /* spacing/margins */
+}
 
 html, body { height: 100%; }
 body {
@@ -24,6 +29,7 @@ canvas {
   border-radius: 12px;
 }
 
+/* Overlays */
 .overlay {
   position: absolute;
   inset: 0;
@@ -78,9 +84,19 @@ canvas {
   z-index: 5;
 }
 
-.btn {
+.cluster {
   position: absolute;
-  width: 64px; height: 64px;
+  display: flex;
+  gap: var(--gap);
+  pointer-events: none; /* buttons handle interaction */
+}
+
+.cluster.left  { left:  var(--gap); bottom: var(--gap); flex-direction: row; }
+.cluster.right { right: var(--gap); bottom: var(--gap); flex-direction: column; }
+
+.btn {
+  width: var(--btn);
+  height: var(--btn);
   border-radius: 12px;
   background: rgba(0,0,0,0.25);
   border: 1px solid rgba(255,255,255,0.08);
@@ -89,20 +105,13 @@ canvas {
   touch-action: none;
 }
 
-/* D-pad left bottom */
-.btn.dpad.left  { left: 12px; bottom: 20px; }
-.btn.dpad.right { left: 92px; bottom: 20px; }
-/* Actions right bottom */
-.btn.act.jump   { right: 92px; bottom: 28px; }
-.btn.act.attack { right: 20px; bottom: 64px; }
-
 /* Use your UI images */
-.btn.dpad.left  { background: url('assets/ui_left.png') center/70% no-repeat, rgba(0,0,0,0.25); }
-.btn.dpad.right { background: url('assets/ui_right.png') center/70% no-repeat, rgba(0,0,0,0.25); }
-.btn.act.jump   { background: url('assets/ui_jump.png') center/80% no-repeat, rgba(0,0,0,0.25); }
-.btn.act.attack { background: url('assets/ui_attack.png') center/80% no-repeat, rgba(0,0,0,0.25); }
+#btn-left   { background: url('assets/ui_left.png')  center/70% no-repeat, rgba(0,0,0,0.25); }
+#btn-right  { background: url('assets/ui_right.png') center/70% no-repeat, rgba(0,0,0,0.25); }
+#btn-jump   { background: url('assets/ui_jump.png')  center/80% no-repeat, rgba(0,0,0,0.25); }
+#btn-attack { background: url('assets/ui_attack.png')center/80% no-repeat, rgba(0,0,0,0.25); }
 
-/* Hide buttons on wide desktop; JS will still toggle for play state */
+/* Hide buttons on wide desktop; JS still toggles during play */
 @media (min-width: 900px) {
   #touch-controls { display: none; }
 }
