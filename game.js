@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const BASE_W = 256, BASE_H = 224;
 
-  // DOM
+  // DOM refs
   const root = document.getElementById('root');
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d', { alpha: true });
@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const log = (...a)=>{ const s=a.join(' '); console.log(s); hud.textContent = (hud.textContent+'\n'+s).trim().slice(-900); };
 
-  // Sizing
+  /* ---------------- Layout / scale ---------------- */
   function resize() {
     canvas.width = BASE_W; canvas.height = BASE_H;
     const scale = Math.max(1, Math.floor(Math.min(
@@ -35,12 +35,12 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('resize', resize, { passive:true });
   resize();
 
-  // State
+  /* ---------------- State machine ---------------- */
   let state = 'TITLE'; // 'TITLE' | 'LOADING' | 'PLAY'
   let last = 0;
   let frameCount = 0;
 
-  // Input (pointer + keyboard)
+  /* ---------------- Input ---------------- */
   const input = { left:false, right:false, jump:false, attack:false };
   function bindHold(id, setter){
     const el = document.getElementById(id); if(!el) return;
@@ -72,7 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if(['KeyJ','KeyK','KeyZ','KeyX'].includes(k)) input.attack=false;
   }, { passive:false });
 
-  // Start
   const requestStart = (e)=>{
     e?.preventDefault?.();
     if(state!=='TITLE') return;
@@ -87,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
     uiTitle.addEventListener(ev, requestStart, { passive:false });
   });
 
-  // Loader
+  /* ---------------- Loader ---------------- */
   const MANIFEST_PATH = 'assets/manifest/manifest.json';
   let manifest = null;
   const images = new Map();
@@ -113,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const paths = [];
 
-    // Manifest sprites (usagi + ninja)
+    // From manifest (usagi + ninja)
     if (manifest) {
       for (const char of Object.keys(manifest)) {
         for (const key of Object.keys(manifest[char])) {
@@ -126,12 +125,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Backgrounds
     for (let i=1;i<=6;i++) paths.push(`assets/background/background${i}.png`);
 
-    // UI button icons (these are the filenames in your repo root assets/)
+    // UI button icons (correct directory)
     const UI_ICONS = {
-      left:   'assets/ui_left.png',
-      right:  'assets/ui_right.png',
-      jump:   'assets/ui_jump.png',
-      attack: 'assets/ui_attack.png',
+      left:   'assets/ui/ui_left.png',
+      right:  'assets/ui/ui_right.png',
+      jump:   'assets/ui/ui_jump.png',
+      attack: 'assets/ui/ui_attack.png',
     };
     const uiIconPaths = Object.values(UI_ICONS);
     paths.push(...uiIconPaths);
@@ -159,35 +158,26 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Apply UI icons to buttons even if some other assets failed
-    const setIcon = (id, path)=>{
+    // Apply UI icons (CSS variable drives ::after background-image)
+    const setIcon = (id, path, fallbackGlyph)=>{
       const el = document.getElementById(id);
       if (!el) return;
-      const img = images.get(path);
-      if (img) {
-        // apply to ::after via inline CSS variable (works on Android)
+      if (images.has(path)) {
         el.style.setProperty('--icon-url', `url("${path}")`);
-        el.style.position = 'relative';
-        // force icon on pseudo-element (CSS var fallback)
-        el.querySelector?.(':after'); // harmless touch for legacy
-        el.style.setProperty('content', '');
-        el.style.setProperty('background-image', `url("${path}")`);
       } else {
-        // fallback glyph
-        const map = { left:'◀', right:'▶', jump:'▲', attack:'✕' };
-        el.textContent = map[id] || '?';
+        el.textContent = fallbackGlyph;
         el.style.fontWeight = '900';
         el.style.fontSize = Math.floor(parseInt(getComputedStyle(el).width)*0.45)+'px';
       }
     };
-    setIcon('left',   UI_ICONS.left);
-    setIcon('right',  UI_ICONS.right);
-    setIcon('jump',   UI_ICONS.jump);
-    setIcon('attack', UI_ICONS.attack);
+    setIcon('left',   UI_ICONS.left,   '◀');
+    setIcon('right',  UI_ICONS.right,  '▶');
+    setIcon('jump',   UI_ICONS.jump,   '▲');
+    setIcon('attack', UI_ICONS.attack, '✕');
 
     if (missing.length) {
-      log('Missing images:', '\n' + missing.slice(0,12).join('\n') + (missing.length>12?'\n…':''));
-      log('Tip: rename or move files so paths match exactly.');
+      log('Missing images:\n' + missing.join('\n'));
+      log('Tip: ensure filenames/paths are exact (case-sensitive).');
     }
 
     uiLoading.classList.remove('visible');
@@ -195,7 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state='PLAY';
   }
 
-  // Simple anim/sheet helpers
+  /* ---------------- Sprites / Anims ---------------- */
   class StripSheet {
     constructor(img, fw, fh, frames){ this.img=img; this.fw=fw; this.fh=fh; this.frames=frames||1; }
     rect(i){ const j=Math.max(0, Math.min(this.frames-1, i|0)); return {sx:j*this.fw+0.01, sy:0.01, sw:this.fw-0.02, sh:this.fh-0.02}; }
@@ -227,7 +217,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Manifest sheets → actors
   let manifestBuilt=false;
   const player = new Actor();
   const enemies = [];
@@ -246,7 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return out;
   }
 
-  // Update / render
+  /* ---------------- Update / Render / Loop ---------------- */
   let scroll=0;
   function update(dt){
     if(state==='PLAY'){
@@ -291,7 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function render(){
     ctx.clearRect(0,0,BASE_W,BASE_H);
-    // BG: first existing background (tiled)
+    // Background (tiled)
     let bgImg = null;
     for (let i=1;i<=6;i++){ const p=`assets/background/background${i}.png`; if(images.get(p)){ bgImg=images.get(p); break; } }
     if(bgImg){
@@ -305,9 +294,9 @@ document.addEventListener('DOMContentLoaded', () => {
     player.draw(ctx);
     enemies.forEach(e=>e.draw(ctx));
 
-    // show short missing-list line
+    // small indicator for missing count
     if (missing.length) {
-      ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(6,6,120,16);
+      ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(6,6,130,16);
       ctx.fillStyle='#fff'; ctx.font='10px monospace';
       ctx.fillText(`Missing: ${missing.length}`, 10, 18);
     }
