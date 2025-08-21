@@ -1,8 +1,6 @@
-/* Pixel-art friendly defaults */
 :root { color-scheme: dark; }
 
 html, body { height: 100%; }
-
 body {
   margin: 0;
   background: #0b0b0b;
@@ -12,14 +10,88 @@ body {
   user-select: none;
 }
 
+/* Game container centers canvas and overlays */
+#game-root { position: relative; }
+
 canvas {
-  image-rendering: optimizeSpeed;      /* older browsers */
-  image-rendering: -moz-crisp-edges;   /* Firefox */
-  image-rendering: pixelated;          /* Chrome/Edge */
-  image-rendering: crisp-edges;        /* Safari (fallback) */
+  image-rendering: optimizeSpeed;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
   -ms-interpolation-mode: nearest-neighbor;
   transform: translateZ(0);
   box-shadow: 0 0.5rem 2rem rgba(0,0,0,0.6);
   background: #000;
-  border-radius: 10px;
+  border-radius: 12px;
+}
+
+/* Overlays (title & error) */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0,0,0,0.55);
+  border-radius: 12px;
+}
+.overlay.hidden { display: none; }
+
+.panel {
+  background: rgba(12,12,14,0.85);
+  color: #e6e6e6;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 16px 20px;
+  text-align: center;
+  width: min(92vw, 420px);
+}
+.panel h1, .panel h2 { margin: 0 0 8px; font-weight: 700; }
+.panel .sub { opacity: 0.8; }
+
+#error-log {
+  text-align: left;
+  max-height: 40vh;
+  overflow: auto;
+  background: #0e0e12;
+  border: 1px solid #202022;
+  border-radius: 8px;
+  padding: 10px;
+  color: #bfe3ff;
+}
+
+/* Touch controls */
+#touch-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* buttons themselves re-enable */
+}
+
+.btn {
+  position: absolute;
+  width: 64px; height: 64px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(2px);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* Place d-pad on left bottom */
+.btn.dpad.left  { left: 12px; bottom: 20px; }
+.btn.dpad.right { left: 92px; bottom: 20px; }
+
+/* Place actions on right bottom */
+.btn.act.jump   { right: 92px; bottom: 28px; }
+.btn.act.attack { right: 20px; bottom: 64px; }
+
+/* Use your UI images */
+.btn.dpad.left  { background: url('assets/ui_left.png') center/70% no-repeat, rgba(0,0,0,0.25); }
+.btn.dpad.right { background: url('assets/ui_right.png') center/70% no-repeat, rgba(0,0,0,0.25); }
+.btn.act.jump   { background: url('assets/ui_jump.png') center/80% no-repeat, rgba(0,0,0,0.25); }
+.btn.act.attack { background: url('assets/ui_attack.png') center/80% no-repeat, rgba(0,0,0,0.25); }
+
+/* Hide buttons on larger screens (toggle via JS if you prefer) */
+@media (min-width: 900px) {
+  #touch-controls { display: none; }
 }
