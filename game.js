@@ -1,8 +1,10 @@
 /* =========================================================
-   Usagi Prototype – Pixel-Perfect + Finalized Placeholder Art
-   - Uses new assets/ structure and 128x128 sprite frames
-   - Animation maps wired to atlas-like grid (no guesswork)
-   - Mobile buttons clustered & responsive (no overlap)
+   Usagi Prototype – Multi-Level Backgrounds (6 stages)
+   - Loads assets/background/background1.png ... background6.png
+   - Each level uses a different background
+   - Background auto-scrolls; tiled horizontally
+   - Level cycling: N (next), P (prev); or hold Jump+Attack (mobile)
+   - Keeps pixel-perfect sprite rendering and mobile controls
    ========================================================= */
 
 const BASE_W = 256, BASE_H = 224;
@@ -35,7 +37,7 @@ function resizeCanvas() {
   root.style.width  = canvas.style.width;
   root.style.height = canvas.style.height;
 
-  // Touch control sizing
+  // Responsive touch control sizing
   const shortest = Math.min(w, h);
   const btn = Math.max(48, Math.min(96, Math.floor(shortest / 6))); // 48–96px
   const gap = Math.max(10, Math.floor(btn * 0.25));
@@ -49,10 +51,16 @@ const ipx = n => Math.round(n);
 
 // -------------------- Assets ---------------------------
 const ASSETS = {
-  backgroundFallback: null, // we draw a simple ground if no bg
   usagi: 'assets/sprites/usagi.png',
   ninjas: 'assets/sprites/ninjas.png',
-  tileset: 'assets/tiles/tileset.png',
+  backgrounds: [
+    'assets/background/background1.png',
+    'assets/background/background2.png',
+    'assets/background/background3.png',
+    'assets/background/background4.png',
+    'assets/background/background5.png',
+    'assets/background/background6.png',
+  ],
   ui: {
     left:   'assets/ui/ui_left.png',
     right:  'assets/ui/ui_right.png',
@@ -155,6 +163,8 @@ function handleKey(e, down){
   if(k==='ArrowUp'||k==='KeyW'||k==='Space'){ input.jump=down; e.preventDefault(); }
   if(['KeyJ','KeyK','KeyF','KeyH','KeyZ','KeyX'].includes(k)){ input.attack=down; e.preventDefault(); }
   if(k==='Enter' && down) startGame();
+  if(k==='KeyN' && down) nextLevel();
+  if(k==='KeyP' && down) prevLevel();
   if(k==='Backquote') input.debug=down;
 }
 addEventListener('keydown', e=>handleKey(e,true), {passive:false});
@@ -184,36 +194,18 @@ bindHold('btn-attack',v=>input.attack=v);
 const GAME = {
   state: 'boot',
   report: [],
-  bgImg: null,
   player: null,
-  enemy: null
+  enemy: null,
+  // Background/level data
+  levels: [],
+  levelIndex: 0,
+  scrollX: 0,
+  comboLatch: false // for mobile: hold Jump+Attack to change level
 };
 
-/* ======== NEW SPRITE SHEETS: fixed grids ========
-   usagi.png:  8 columns x 4 rows, frame 128x128
-   ninjas.png: 8 columns x 3 rows, frame 128x128
-   Animation frames below reference absolute indices.
-   Index = row*cols + col  (cols = 8)
-================================================== */
-const COLS = 8;
-
-// Usagi frame indices
-const U = {
-  idle:   [0,1,2],
-  walk:   [3,4,5,6,7, 8],         // row0 col3..7, row1 col0
-  run:    [9,10,11,12,13,14,15],  // row1 col1..7
-  attack: [16,17,18,19,20,21],    // row2 col0..5
-  jump:   [22,23],                 // row2 col6..7
-  hurt:   [24]                     // row3 col0
-};
-
-// Ninja simple demo indices (first row black)
-const N = {
-  idle:   [0],
-  walk:   [1,2,6,7], // just cycle for demo
-  attack: [3,4],
-  hurt:   [5]
-};
+// -------------------- Frame maps ------------------------
+const U = { idle:[0,1,2], walk:[3,4,5,6,7,8], run:[9,10,11,12,13,14,15], attack:[16,17,18,19,20,21], jump:[22,23], hurt:[24] };
+const N = { idle:[0], walk:[1,2,6,7], attack:[3,4], hurt:[5] };
 
 let lastTime=0;
 function loop(now){
@@ -224,42 +216,42 @@ function loop(now){
 // -------------------- Boot ------------------------------
 async function boot(){
   try{
-    // Load sheets
+    // Load sprites
     const [uimg, nimg] = await Promise.all([
       loadImage(ASSETS.usagi),
       loadImage(ASSETS.ninjas)
     ]);
-    GAME.report.push(`OK   ${ASSETS.usagi} (${uimg.width}x${uimg.height})`);
-    GAME.report.push(`OK   ${ASSETS.ninjas} (${nimg.width}x${nimg.height})`);
-
-    const usagiSheet = new SpriteSheet(uimg, 128,128, 8);
-    const ninjaSheet = new SpriteSheet(nimg, 128,128, 8);
+    const usagiSheet = new SpriteSheet(uimg,128,128,8);
+    const ninjaSheet = new SpriteSheet(nimg,128,128,8);
 
     // Player
     const p = new Sprite(usagiSheet);
-    p.addAnim('idle',   new Animation(U.idle,   6,  true));
-    p.addAnim('walk',   new Animation(U.walk,   8,  true));
-    p.addAnim('run',    new Animation(U.run,    12, true));
-    p.addAnim('attack', new Animation(U.attack, 12, false, true));
-    p.addAnim('jump',   new Animation(U.jump,   6,  false, true));
-    p.addAnim('hurt',   new Animation(U.hurt,   4,  false, true));
+    p.addAnim('idle',   new Animation(U.idle,6,true));
+    p.addAnim('walk',   new Animation(U.walk,8,true));
+    p.addAnim('run',    new Animation(U.run,12,true));
+    p.addAnim('attack', new Animation(U.attack,12,false,true));
+    p.addAnim('jump',   new Animation(U.jump,6,false,true));
+    p.addAnim('hurt',   new Animation(U.hurt,4,false,true));
     p.play('idle', true);
     GAME.player = p;
 
-    // Enemy (first row of ninjas)
+    // Enemy (demo)
     const e = new Sprite(ninjaSheet);
-    e.x = 200; e.y = 180;
-    e.addAnim('idle',   new Animation(N.idle,   4, true));
-    e.addAnim('walk',   new Animation(N.walk,   6, true));
-    e.addAnim('attack', new Animation(N.attack, 8, false, true));
-    e.addAnim('hurt',   new Animation(N.hurt,   4, false, true));
+    e.x=200; e.y=180;
+    e.addAnim('idle',   new Animation(N.idle,4,true));
+    e.addAnim('walk',   new Animation(N.walk,6,true));
+    e.addAnim('attack', new Animation(N.attack,8,false,true));
+    e.addAnim('hurt',   new Animation(N.hurt,4,false,true));
     e.play('idle', true);
     GAME.enemy = e;
 
-    // Title
-    GAME.state = 'title';
-    titleOverlay.classList.remove('hidden');
+    // Load backgrounds (6 levels)
+    const bgImgs = await Promise.all(ASSETS.backgrounds.map(loadImage));
+    GAME.levels = bgImgs.map((img, i) => ({ name: `Stage ${i+1}`, img, speed: 18 + i*4 }));
+    GAME.levelIndex = 0;
 
+    GAME.state='title';
+    titleOverlay.classList.remove('hidden');
   } catch (e) {
     GAME.report.push('Fatal load error: ' + e.message);
     reportLogEl.textContent = GAME.report.join('\n');
@@ -277,21 +269,68 @@ function startGame(){
   }
 }
 
+// -------------------- Level helpers ---------------------
+function currentLevel(){ return GAME.levels[GAME.levelIndex] || null; }
+function nextLevel(){ GAME.levelIndex = (GAME.levelIndex + 1) % GAME.levels.length; }
+function prevLevel(){ GAME.levelIndex = (GAME.levelIndex - 1 + GAME.levels.length) % GAME.levels.length; }
+
 // -------------------- Update/Render ---------------------
 function update(dt){
   if(GAME.state!=='play') return;
+
+  // mobile combo: hold jump+attack to switch level
+  if (input.jump && input.attack) {
+    if (!GAME.comboLatch) {
+      GAME.comboLatch = true;
+      nextLevel();
+    }
+  } else {
+    GAME.comboLatch = false;
+  }
+
+  // Scroll background
+  const lv = currentLevel();
+  if (lv) GAME.scrollX = (GAME.scrollX + dt * lv.speed) % lv.img.width;
+
   if(GAME.player) GAME.player.update(dt, input);
   if(GAME.enemy)  GAME.enemy.update(dt, {left:false,right:false,jump:false,attack:false});
 }
+
 function render(){
   ctx.clearRect(0,0,BASE_W,BASE_H);
 
-  // Simple background/ground
-  ctx.fillStyle='#1b1f2a'; ctx.fillRect(0,0,BASE_W,BASE_H);
-  ctx.fillStyle = '#2e2e2e'; ctx.fillRect(0, ipx(182), BASE_W, BASE_H - 182);
+  // Title just shows current level background (index 0) if loaded
+  if(GAME.state==='title'){
+    const lv0 = GAME.levels[0];
+    if (lv0) drawTiled(lv0.img, 0);
+    return;
+  }
+
+  // Draw active level background (tiled horizontally)
+  const lv = currentLevel();
+  if (lv) drawTiled(lv.img, GAME.scrollX);
+
+  // Ground strip (kept for readability)
+  ctx.fillStyle='#2e2e2e';
+  ctx.fillRect(0, ipx(182), BASE_W, BASE_H - 182);
 
   if(GAME.player) GAME.player.draw(ctx);
   if(GAME.enemy)  GAME.enemy.draw(ctx);
+}
+
+// Tile background image across the width with an x-offset (scroll)
+function drawTiled(img, scroll){
+  if(!img) return;
+  // Scale image to canvas height, preserve aspect
+  const scale = BASE_H / img.height;
+  const drawW = Math.ceil(img.width * scale);
+  const drawH = BASE_H;
+
+  // Compute x offset
+  const offset = -Math.floor((scroll * scale) % drawW);
+  for (let x = offset; x < BASE_W; x += drawW) {
+    ctx.drawImage(img, 0,0,img.width,img.height, x, 0, drawW, drawH);
+  }
 }
 
 // -------------------- Go -------------------------------
