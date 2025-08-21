@@ -10,7 +10,6 @@ body {
   user-select: none;
 }
 
-/* Game container centers canvas and overlays */
 #game-root { position: relative; }
 
 canvas {
@@ -25,7 +24,6 @@ canvas {
   border-radius: 12px;
 }
 
-/* Overlays (title & error) */
 .overlay {
   position: absolute;
   inset: 0;
@@ -33,11 +31,12 @@ canvas {
   place-items: center;
   background: rgba(0,0,0,0.55);
   border-radius: 12px;
+  z-index: 10;
 }
-.overlay.hidden { display: none; }
+.hidden { display: none !important; }
 
 .panel {
-  background: rgba(12,12,14,0.85);
+  background: rgba(16,16,20,0.9);
   color: #e6e6e6;
   border: 1px solid #2a2a2a;
   border-radius: 12px;
@@ -45,10 +44,22 @@ canvas {
   text-align: center;
   width: min(92vw, 420px);
 }
-.panel h1, .panel h2 { margin: 0 0 8px; font-weight: 700; }
+.panel h1, .panel h2 { margin: 0 0 8px; font-weight: 800; }
 .panel .sub { opacity: 0.8; }
 
-#error-log {
+.start-btn {
+  appearance: none;
+  border: 1px solid #3a7bd5;
+  background: linear-gradient(#2b6cb0, #225ea8);
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 16px;
+  font-weight: 700;
+  margin: 8px 0 4px;
+}
+
+#report-log {
   text-align: left;
   max-height: 40vh;
   overflow: auto;
@@ -64,6 +75,7 @@ canvas {
   position: absolute;
   inset: 0;
   pointer-events: none; /* buttons themselves re-enable */
+  z-index: 5;
 }
 
 .btn {
@@ -77,11 +89,10 @@ canvas {
   touch-action: none;
 }
 
-/* Place d-pad on left bottom */
+/* D-pad left bottom */
 .btn.dpad.left  { left: 12px; bottom: 20px; }
 .btn.dpad.right { left: 92px; bottom: 20px; }
-
-/* Place actions on right bottom */
+/* Actions right bottom */
 .btn.act.jump   { right: 92px; bottom: 28px; }
 .btn.act.attack { right: 20px; bottom: 64px; }
 
@@ -91,7 +102,7 @@ canvas {
 .btn.act.jump   { background: url('assets/ui_jump.png') center/80% no-repeat, rgba(0,0,0,0.25); }
 .btn.act.attack { background: url('assets/ui_attack.png') center/80% no-repeat, rgba(0,0,0,0.25); }
 
-/* Hide buttons on larger screens (toggle via JS if you prefer) */
+/* Hide buttons on wide desktop; JS will still toggle for play state */
 @media (min-width: 900px) {
   #touch-controls { display: none; }
 }
