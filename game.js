@@ -1,11 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
   const BASE_W = 256, BASE_H = 224;
-  const VERSION = 'atlas2';
+  const VERSION = 'atlas3';
 
   // DOM
   const root = document.getElementById('root');
   const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d', { alpha: true });
+  const ctx = canvas.getContext('2d', { alpha: true, willReadFrequently: true });
   const uiTitle   = document.getElementById('ui-title');
   const btnStart  = document.getElementById('btn-start');
   const uiLoading = document.getElementById('ui-loading');
@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadText  = document.getElementById('load-text');
   const touchUI   = document.getElementById('touch');
   const hud       = document.getElementById('hud');
-  const log = (...a)=>{ const s=a.join(' '); console.log(s); hud.textContent=(hud.textContent+'\n'+s).trim().slice(-1200); };
+  const log = (...a)=>{ const s=a.join(' '); console.log(s); hud.textContent=(hud.textContent+'\n'+s).trim().slice(-1400); };
 
   /* ---------- layout ---------- */
   function resize() {
@@ -78,14 +78,14 @@ document.addEventListener('DOMContentLoaded', () => {
     uiTitle.addEventListener(ev,startRequest,{passive:false});
   });
 
-  /* ---------- loader (atlas + maps) ---------- */
+  /* ---------- loader (atlas + maps + ui + bg) ---------- */
   const PATHS = {
     // sprite atlases
     usagiAtlas:  'assets/sprites/usagi.png',
     usagiMap:    'assets/sprites/usagi_map.json',
     ninjasAtlas: 'assets/sprites/ninjas.png',
     ninjasMap:   'assets/sprites/ninjas_map.json',
-    // UI
+    // UI icons (exactly where your screenshot shows)
     ui: {
       left:  'assets/ui/ui_left.png',
       right: 'assets/ui/ui_right.png',
@@ -112,13 +112,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let done=0,total=queue.length; const tick=()=>{ const pct = Math.round(done/total*100); barFill.style.width=pct+'%'; loadText.textContent=`Loaded: ${done} / ${total}`; };
     tick();
     const results = await Promise.all(queue.map(p=>p.then(r=>{done++;tick();return r;})));
+    const missing=[];
     for(const r of results){
-      if(!r.ok) continue;
+      if(!r.ok){ missing.push(r.path); continue; }
       if('img' in r) images.set(r.path, r.img);
       if('json' in r) jsons.set(r.path, r.json);
     }
+    if(missing.length){ log('Missing:', missing.length); missing.forEach(p=>log('  ',p)); } else { log('All assets loaded'); }
 
-    // Set touch icons (fallback glyphs if missing)
+    // Set touch icons (fallback glyphs if some icon missing)
     const setIcon = (id, path, glyph)=>{
       const el = document.getElementById(id);
       if(images.has(path)) el.style.setProperty('--icon-url', `url("${cb(path)}")`);
@@ -127,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setIcon('left',PATHS.ui.left,'◀'); setIcon('right',PATHS.ui.right,'▶');
     setIcon('jump',PATHS.ui.jump,'▲'); setIcon('attack',PATHS.ui.attack,'✕');
 
-    // Build sprite sets
+    // Build sprites
     buildSprites();
 
     uiLoading.classList.remove('visible');
@@ -240,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function render(){
     ctx.clearRect(0,0,BASE_W,BASE_H);
 
-    // background
+    // background (first one that loads)
     let bgImg=null;
     for(let i=1;i<=6;i++){ const p=`assets/background/background${i}.png`; if(images.get(p)){ bgImg=images.get(p); break; } }
     if(bgImg){
