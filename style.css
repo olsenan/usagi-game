@@ -24,17 +24,17 @@ kbd{background:#222;border:1px solid #444;border-bottom-color:#111;padding:2px 6
 /* Touch controls */
 .touch{position:absolute;inset:0;pointer-events:none;z-index:40}
 .tc{
-  position:absolute; width:var(--btn); height:var(--btn);
-  border-radius:18px; background:rgba(16,24,28,.65);
-  border:1px solid rgba(255,255,255,.12); backdrop-filter: blur(6px);
-  pointer-events:auto;
-  display:grid; place-items:center; overflow:hidden;
+  position:absolute;width:var(--btn);height:var(--btn);
+  border-radius:18px;background:rgba(16,24,28,.65);
+  border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(6px);
+  pointer-events:auto;display:grid;place-items:center;overflow:hidden;
 }
 .tc::after{
-  /* icon placeholder; actual icon is applied inline from JS as background-image */
-  content:""; width:70%; height:70%;
-  background-repeat:no-repeat; background-position:center; background-size:contain;
-  opacity:.95; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));
+  content:"";
+  width:70%;height:70%;
+  background-image: var(--icon-url, none);   /* <-- JS sets this */
+  background-repeat:no-repeat;background-position:center;background-size:contain;
+  opacity:.95;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35));
 }
 .tc-left{left:var(--gap);bottom:var(--gap)}
 .tc-right{left:calc(var(--gap) + var(--btn) + var(--gap));bottom:var(--gap)}
