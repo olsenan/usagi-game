@@ -3,45 +3,30 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Usagi Prototype</title>
-  <link rel="stylesheet" href="style.css?v=atlas3">
+  <title>Usagi Arcade Brawler – Debug Build</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="root">
-    <canvas id="game" width="256" height="224" aria-label="Game canvas"></canvas>
+  <!-- Game container handles letterboxing & safe pixel scaling -->
+  <div id="game-root">
+    <canvas id="game"></canvas>
 
-    <!-- Title -->
-    <div class="overlay visible" id="ui-title">
-      <div class="title-bg"></div>
-      <div class="panel">
-        <h1 class="logo"><span>USAGI</span><em>YOJIMBO</em></h1>
-        <button class="btn" id="btn-start">Start</button>
-        <p class="hint small">Press <kbd>Enter</kbd> or tap anywhere</p>
-        <p class="small">Build atlas3</p>
+    <!-- On-screen controls (mobile friendly) -->
+    <div id="hud">
+      <div class="pad">
+        <button id="btn-left" aria-label="Left">◀</button>
+        <button id="btn-right" aria-label="Right">▶</button>
+      </div>
+      <div class="pad">
+        <button id="btn-jump" aria-label="Jump">J</button>
+        <button id="btn-attack" aria-label="Attack">A</button>
       </div>
     </div>
 
-    <!-- Loading -->
-    <div class="overlay" id="ui-loading" aria-hidden="true">
-      <div class="panel">
-        <h2 class="heading">Loading…</h2>
-        <div class="bar"><div id="bar-fill"></div></div>
-        <p class="small" id="load-text">Loaded: 0 / 0</p>
-        <p class="small">Build atlas3</p>
-      </div>
-    </div>
-
-    <!-- Touch controls -->
-    <div class="touch hidden" id="touch" aria-hidden="true">
-      <div class="tc tc-left"   id="left"   title="Left"></div>
-      <div class="tc tc-right"  id="right"  title="Right"></div>
-      <div class="tc tc-jump"   id="jump"   title="Jump"></div>
-      <div class="tc tc-attack" id="attack" title="Attack"></div>
-    </div>
-
-    <!-- Debug HUD -->
-    <pre class="hud" id="hud">Build atlas3</pre>
+    <!-- Small build/debug overlay -->
+    <div id="overlay" class="mono"></div>
   </div>
-  <script src="game.js?v=atlas3"></script>
+
+  <script src="fullgame.js"></script>
 </body>
 </html>
