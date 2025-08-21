@@ -1,10 +1,8 @@
 /* =========================================================
-   Usagi Prototype – Enemies + Combat + Stages
-   - Loads usagi.png / ninjas.png sprite sheets (128x128)
-   - Six backgrounds (one per stage)
-   - Spawns ninja waves with simple AI
-   - Player sword hitbox & enemy contact damage
-   - Health bars + stage progression
+   Usagi Prototype – Per-Animation Sprite Sheets Loader
+   - Uses assets/sprites/usagi/*.png with manifest.json
+   - Uses assets/sprites/ninja/*.png with manifest.json
+   - Keeps backgrounds, enemies, combat, health bars, mobile UI
    ========================================================= */
 
 const BASE_W = 256, BASE_H = 224;
@@ -37,8 +35,9 @@ function resizeCanvas() {
   root.style.width  = canvas.style.width;
   root.style.height = canvas.style.height;
 
+  // Touch controls responsive sizing
   const shortest = Math.min(w, h);
-  const btn = Math.max(48, Math.min(96, Math.floor(shortest / 6))); // 48–96px
+  const btn = Math.max(48, Math.min(96, Math.floor(shortest / 6)));
   const gap = Math.max(10, Math.floor(btn * 0.25));
   root.style.setProperty('--btn', `${btn}px`);
   root.style.setProperty('--gap', `${gap}px`);
@@ -48,26 +47,21 @@ resizeCanvas();
 
 const ipx = n => Math.round(n);
 
-// -------------------- Assets ---------------------------
-const ASSETS = {
-  usagi: 'assets/sprites/usagi.png',
-  ninjas: 'assets/sprites/ninjas.png',
-  backgrounds: [
+// -------------------- Paths ----------------------------
+const PATHS = {
+  usagi:  'assets/sprites/usagi/manifest.json',
+  ninja:  'assets/sprites/ninja/manifest.json',
+  bgs: [
     'assets/background/background1.png',
     'assets/background/background2.png',
     'assets/background/background3.png',
     'assets/background/background4.png',
     'assets/background/background5.png',
     'assets/background/background6.png',
-  ],
-  ui: {
-    left:   'assets/ui/ui_left.png',
-    right:  'assets/ui/ui_right.png',
-    jump:   'assets/ui/ui_jump.png',
-    attack: 'assets/ui/ui_attack.png'
-  }
+  ]
 };
 
+// -------------------- Utils ----------------------------
 function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -77,22 +71,28 @@ function loadImage(src) {
     img.src = src;
   });
 }
+async function loadJSON(src) {
+  const res = await fetch(src, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Failed to load JSON: ${src}`);
+  return res.json();
+}
 
-// -------------------- Core Sprite Helpers ---------------
-class SpriteSheet {
-  constructor(img, fw, fh, cols, margin=0, spacing=0) {
-    this.img=img; this.fw=fw; this.fh=fh; this.cols=cols;
-    this.margin=margin; this.spacing=spacing;
-    this.safeInset=0.01; // bleed guard
+// -------------------- Sprite System --------------------
+class StripSheet {
+  constructor(img, frameW, frameH, frames) {
+    this.img = img;
+    this.fw = frameW;
+    this.fh = frameH;
+    this.frames = Math.max(1, frames);
   }
+  // Horizontal strip: index 0..frames-1
   srcRect(i) {
-    const col = i % this.cols, row = Math.floor(i / this.cols);
-    const s = this.spacing, m = this.margin, inset = this.safeInset;
-    const sx = m + col * (this.fw + s) + inset;
-    const sy = m + row * (this.fh + s) + inset;
-    return { sx, sy, sw: this.fw - inset*2, sh: this.fh - inset*2 };
+    const clamped = Math.max(0, Math.min(this.frames - 1, i|0));
+    const sx = clamped * this.fw + 0.01; // bleed guard
+    return { sx, sy: 0.01, sw: this.fw - 0.02, sh: this.fh - 0.02 };
   }
 }
+
 class Animation {
   constructor(frames, fps=8, loop=true, holdLast=false) {
     this.frames=frames; this.fps=fps; this.loop=loop; this.holdLast=holdLast;
@@ -113,51 +113,58 @@ class Animation {
   currentFrame(){ return this.frames[Math.min(this.i,this.frames.length-1)]; }
   reset(){ this.t=0; this.i=0; this.done=false; }
 }
+
 class Actor {
-  constructor(sheet){
-    this.sheet=sheet; this.x=128; this.y=180;
+  constructor(){
+    this.x=128; this.y=180;
     this.anchorX=0.5; this.anchorY=1.0; this.flipX=false; this.scale=1;
     this.vx=0; this.vy=0; this.onGround=true;
     this.speed=45; this.jumpV=-130; this.gravity=340;
-    this.anims=new Map(); this.current=null;
     this.shadow=true;
 
-    // combat stats
-    this.hp = 5;
-    this.maxHp = 5;
-    this.invulnT = 0;   // seconds of invulnerability after hit
+    this.anims = new Map();  // name -> { sheet:StripSheet, frames:number, anim:Animation }
+    this.currentName = null;
+    this.invulnT = 0;
+
+    this.hp = 5; this.maxHp = 5;
   }
-  addAnim(n,a){ this.anims.set(n,a); }
-  play(n, restart=false){ const a=this.anims.get(n); if(!a) return; if(this.current!==a||restart) a.reset(); this.current=a; }
+
+  addAnim(name, sheet, fps=8, loop=true, holdLast=false) {
+    const frames = Array.from({length: sheet.frames}, (_,i)=>i);
+    this.anims.set(name, { sheet, anim: new Animation(frames, fps, loop, holdLast) });
+  }
+
+  play(name, restart=false) {
+    if (!this.anims.has(name)) return;
+    if (this.currentName !== name || restart) {
+      this.anims.get(name).anim.reset();
+      this.currentName = name;
+    }
+  }
+
   updatePhysics(dt){
     this.x+=this.vx*dt; this.vy+=this.gravity*dt; this.y+=this.vy*dt;
     if(this.y>=180){ this.y=180; this.vy=0; this.onGround=true; }
-    if(this.current) this.current.update(dt);
+    if (this.currentName) this.anims.get(this.currentName).anim.update(dt);
     if(this.invulnT>0) this.invulnT = Math.max(0, this.invulnT - dt);
   }
+
   draw(ctx){
-    if(!this.current) return;
-    const {sx,sy,sw,sh}=this.sheet.srcRect(this.current.currentFrame());
-    const dw=this.sheet.fw*this.scale, dh=this.sheet.fh*this.scale;
+    if(!this.currentName) return;
+    const {sheet, anim} = this.anims.get(this.currentName);
+    const frame = anim.currentFrame();
+    const {sx,sy,sw,sh}=sheet.srcRect(frame);
+    const dw=sheet.fw*this.scale, dh=sheet.fh*this.scale;
 
     if(this.shadow){ const shw=ipx(dw*0.6), shh=ipx(dh*0.15); ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.fillRect(ipx(this.x-shw/2), ipx(this.y-2), shw, shh); }
 
-    ctx.save();
-    ctx.translate(ipx(this.x), ipx(this.y));
-    if(this.flipX) ctx.scale(-1,1);
-
-    // flicker while invulnerable
-    if(this.invulnT>0 && (Math.floor(performance.now()/50)%2)===0) {
-      ctx.globalAlpha = 0.5;
-    }
-
-    ctx.drawImage(this.sheet.img, sx,sy,sw,sh, ipx(-this.anchorX*dw), ipx(-this.anchorY*dh), dw, dh);
-    ctx.restore();
-    ctx.globalAlpha = 1;
+    ctx.save(); ctx.translate(ipx(this.x), ipx(this.y)); if(this.flipX) ctx.scale(-1,1);
+    if(this.invulnT>0 && (Math.floor(performance.now()/50)%2)===0) ctx.globalAlpha = 0.5;
+    ctx.drawImage(sheet.img, sx,sy,sw,sh, ipx(-this.anchorX*dw), ipx(-this.anchorY*dh), dw, dh);
+    ctx.restore(); ctx.globalAlpha = 1;
   }
-  rect(w=22,h=40){ // basic body hurtbox for overlap checks
-    return { x: this.x - w/2, y: this.y - h, w, h };
-  }
+
+  rect(w=22,h=40){ return { x: this.x - w/2, y: this.y - h, w, h }; }
 }
 
 // -------------------- Input -----------------------------
@@ -198,72 +205,76 @@ bindHold('btn-attack',v=>input.attack=v);
 const GAME = {
   state: 'boot',
   report: [],
-  player: null,
-  enemies: [],
-  // Stage data
-  levels: [],
+  bgs: [],
   levelIndex: 0,
   scrollX: 0,
-
-  // sheets
-  usagiSheet: null,
-  ninjaSheet: null
+  player: null,
+  enemies: []
 };
 
-// -------------------- Animation Frame Maps --------------
-// Using the indices from the earlier sheets (8 columns)
-const U = {
-  idle:   [0,1,2],
-  walk:   [3,4,5,6,7, 8],         // row0 col3..7 + row1 col0
-  run:    [9,10,11,12,13,14,15],  // row1 col1..7
-  attack: [16,17,18,19,20,21],    // row2 col0..5
-  jump:   [22,23],                 // row2 col6..7
-  hurt:   [24]                     // row3 col0
-};
-// First row (black ninja) simple loop from earlier sheet
-const N = {
-  idle:   [0],
-  walk:   [1,2,6,7],   // keep it simple
-  attack: [3,4],
-  hurt:   [5]
-};
-
-// -------------------- Loop ------------------------------
+// -------------------- Boot ------------------------------
 let lastTime=0;
 function loop(now){
   const dt=Math.min(0.05,(now-lastTime)/1000)||0.0167; lastTime=now;
   update(dt); render(); requestAnimationFrame(loop);
 }
 
-// -------------------- Boot ------------------------------
 async function boot(){
   try{
-    const [uimg, nimg, ...bgs] = await Promise.all([
-      loadImage(ASSETS.usagi),
-      loadImage(ASSETS.ninjas),
-      ...ASSETS.backgrounds.map(loadImage)
+    // Load manifests
+    const [maniUsagi, maniNinja] = await Promise.all([
+      loadJSON(PATHS.usagi),
+      loadJSON(PATHS.ninja)
     ]);
 
-    GAME.usagiSheet = new SpriteSheet(uimg, 128,128,8);
-    GAME.ninjaSheet = new SpriteSheet(nimg, 128,128,8);
+    // Load sheets referenced by manifests
+    const loadSheets = async (manifest) => {
+      const entries = Object.entries(manifest); // {name:{frameSize:[w,h], frames, path}}
+      const out = {};
+      await Promise.all(entries.map(async ([name, meta]) => {
+        const img = await loadImage(meta.path);
+        out[name] = new StripSheet(img, meta.frameSize[0], meta.frameSize[1], meta.frames);
+      }));
+      return out;
+    };
+    const usagiSheets = await loadSheets(maniUsagi);
+    const ninjaSheets = await loadSheets(maniNinja);
 
-    // Player
-    const p = new Actor(GAME.usagiSheet);
-    p.x = 80; p.y = 180; p.scale=1;
-    p.addAnim('idle',   new Animation(U.idle,6,true));
-    p.addAnim('walk',   new Animation(U.walk,8,true));
-    p.addAnim('run',    new Animation(U.run,12,true));
-    p.addAnim('attack', new Animation(U.attack,12,false,true));
-    p.addAnim('jump',   new Animation(U.jump,6,false,true));
-    p.addAnim('hurt',   new Animation(U.hurt,4,false,true));
+    // Backgrounds
+    GAME.bgs = await Promise.all(PATHS.bgs.map(loadImage));
+
+    // Build player from usagi sheets
+    const p = new Actor();
+    p.x = 80; p.y = 180; p.scale = 1;
+    // animation speeds (tweak to taste)
+    p.addAnim('idle',    usagiSheets.idle,    6, true);
+    p.addAnim('walk',    usagiSheets.walk,    8, true);
+    p.addAnim('run',     usagiSheets.run,     12,true);
+    p.addAnim('attack',  usagiSheets.attack1, 12,false,true);
+    p.addAnim('attack2', usagiSheets.attack2, 12,false,true);
+    p.addAnim('jump',    usagiSheets.jump,    6, false, true);
+    p.addAnim('hurt',    usagiSheets.hurt,    6, false, true);
+    p.addAnim('death',   usagiSheets.death,   6, false, true);
     p.play('idle', true);
     p.maxHp = 6; p.hp = 6;
     GAME.player = p;
 
-    // Levels
-    GAME.levels = bgs.map((img, i) => ({ name:`Stage ${i+1}`, img, speed: 16 + i*3, waves: i+1 }));
-    GAME.levelIndex = 0;
-    startLevel(0);
+    // Build enemies (a few ninjas)
+    GAME.enemies.length = 0;
+    for (let i=0;i<3;i++){
+      const e = new Actor();
+      e.x = 160 + i*30; e.y = 180; e.scale=1;
+      e.speed = 30;
+      e.maxHp = 3; e.hp = 3;
+      e.addAnim('idle',   ninjaSheets.idle,   5, true);
+      e.addAnim('walk',   ninjaSheets.walk,   7, true);
+      e.addAnim('attack', ninjaSheets.attack, 9, false, true);
+      e.addAnim('hurt',   ninjaSheets.hurt,   6, false, true);
+      e.addAnim('death',  ninjaSheets.death,  6, false, true);
+      e.play('idle', true);
+      e.ai = { state:'approach', timer: 0 };
+      GAME.enemies.push(e);
+    }
 
     GAME.state='title';
     titleOverlay.classList.remove('hidden');
@@ -276,51 +287,16 @@ async function boot(){
   requestAnimationFrame(loop);
 }
 
-function startGame(){
-  if(GAME.state!=='play'){
-    GAME.state='play';
-    titleOverlay.classList.add('hidden');
-    document.getElementById('touch-controls')?.classList.remove('hidden');
-  }
-}
-
-function startLevel(idx){
-  GAME.levelIndex = idx;
-  GAME.enemies.length = 0;
-  GAME.scrollX = 0;
-
-  // Spawn a simple wave of ninjas (count increases with stage)
-  const count = Math.min(5, 2 + idx);
-  for(let i=0;i<count;i++){
-    const e = new Actor(GAME.ninjaSheet);
-    e.x = 160 + i*30;
-    e.y = 180;
-    e.scale = 1;
-    e.speed = 28 + idx*3;
-    e.maxHp = 3 + Math.floor(idx/2);
-    e.hp = e.maxHp;
-
-    e.addAnim('idle',   new Animation(N.idle,   4, true));
-    e.addAnim('walk',   new Animation(N.walk,   7, true));
-    e.addAnim('attack', new Animation(N.attack, 8, false, true));
-    e.addAnim('hurt',   new Animation(N.hurt,   6, false, true));
-    e.play('idle', true);
-
-    // lightweight AI state
-    e.ai = { state:'approach', timer: 0 };
-    GAME.enemies.push(e);
-  }
-}
-
 // -------------------- Update/Render ---------------------
+function currentBg(){ return GAME.bgs[(GAME.levelIndex%GAME.bgs.length+GAME.bgs.length)%GAME.bgs.length] || null; }
+
 function update(dt){
   if(GAME.state!=='play') return;
 
-  // Scroll background
-  const lv = currentLevel();
-  if (lv) GAME.scrollX = (GAME.scrollX + dt * lv.speed) % (lv.img.width||BASE_W);
+  // Scroll bg
+  const bg = currentBg();
+  if (bg) GAME.scrollX = (GAME.scrollX + dt * 18) % (bg.width||BASE_W);
 
-  // PLAYER input → movement/animation
   const p = GAME.player;
   if(p){
     // movement
@@ -330,12 +306,14 @@ function update(dt){
 
     if(input.jump && p.onGround){ p.vy=p.jumpV; p.onGround=false; }
 
-    // attacks
-    const isBusy = p.current===p.anims.get('attack') && !p.current.done;
-    if(input.attack && !isBusy){ p.play('attack', true); }
+    // attack
+    const busyAtk = (p.currentName==='attack' || p.currentName==='attack2') && !p.anims.get(p.currentName).anim.done;
+    if(input.attack && !busyAtk){
+      p.play(Math.random()<0.5?'attack':'attack2', true);
+    }
 
-    // auto state if not attacking
-    if(!isBusy){
+    // auto state
+    if(!busyAtk){
       if(!p.onGround) p.play('jump');
       else if (Math.abs(p.vx) > p.speed*0.75) p.play('run');
       else if (Math.abs(p.vx) > 0) p.play('walk');
@@ -345,47 +323,43 @@ function update(dt){
     p.updatePhysics(dt);
   }
 
-  // ENEMY AI + movement
+  // Enemy AI & combat
   for(const e of GAME.enemies){
     if(e.hp<=0) continue;
-
-    const dist = (p.x - e.x);
-    e.flipX = dist < 0; // face player
+    const dist = (GAME.player.x - e.x);
+    e.flipX = dist < 0;
 
     e.ai.timer -= dt;
     const close = Math.abs(dist) < 22;
 
     if(e.invulnT>0){
-      // stagger back slightly when hit
       e.vx = (e.flipX ? -1 : 1) * -30;
       e.play('hurt');
     } else if(close && e.ai.timer <= 0){
       e.play('attack', true);
       e.vx = 0;
-      e.ai.timer = 0.8; // cooldown
+      e.ai.timer = 0.8;
     } else if (!close){
       e.play('walk');
       e.vx = Math.sign(dist) * e.speed;
     } else {
-      e.vx = 0;
-      if(e.current!==e.anims.get('attack')) e.play('idle');
+      e.vx = 0; if(e.currentName!=='attack') e.play('idle');
     }
 
     e.updatePhysics(dt);
 
-    // Enemy attack touches player (contact damage when in attack frames)
-    const atk = e.current===e.anims.get('attack') && !e.current.done;
+    // Enemy hits player
+    const atk = e.currentName==='attack' && !e.anims.get('attack').anim.done;
     if(atk && overlap(e.rect(20,36), p.rect(20,40)) && p.invulnT<=0){
       damageActor(p, 1, (p.x < e.x) ? -80 : 80);
     }
   }
 
-  // PLAYER sword hitbox → enemies
+  // Player sword hits enemies
   if(p){
-    const atk = p.current===p.anims.get('attack');
-    const frameIndex = atk ? p.current.currentFrame() : -1;
-    // Make the middle of the combo active
-    const active = atk && (frameIndex===18 || frameIndex===19 || frameIndex===20);
+    const atk1 = p.currentName==='attack'  && !p.anims.get('attack').anim.done;
+    const atk2 = p.currentName==='attack2' && !p.anims.get('attack2').anim.done;
+    const active = atk1 || atk2;
     if(active){
       const hit = playerSwordHitbox(p);
       for(const e of GAME.enemies){
@@ -396,71 +370,45 @@ function update(dt){
     }
   }
 
-  // Clean up dead enemies and progress level
-  let living = 0;
-  for(const e of GAME.enemies){ if(e.hp>0) living++; }
+  // Simple cleanup / respawn logic
+  let living = 0; for(const e of GAME.enemies) if(e.hp>0) living++;
   if(living===0){
-    // Next level after a short delay
-    levelAdvanceTimer = Math.max(0, levelAdvanceTimer - dt);
-    if(levelAdvanceTimer===0){
-      levelAdvanceTimer = 1.25;
-      const next = (GAME.levelIndex + 1) % GAME.levels.length;
-      startLevel(next);
-    }
+    // advance stage and respawn
+    GAME.levelIndex = (GAME.levelIndex + 1) % GAME.bgs.length;
+    for (const e of GAME.enemies) { e.hp = e.maxHp; e.x = 160 + Math.random()*40; }
   }
 
-  // Lose condition (optional: simple respawn)
   if(p && p.hp<=0){
-    startLevel(GAME.levelIndex); // quick reset of current level
-    p.hp = p.maxHp;
+    p.hp = p.maxHp; p.x = 80; p.y = 180; // quick respawn
   }
 }
-
-let levelAdvanceTimer = 1.25;
 
 function render(){
   ctx.clearRect(0,0,BASE_W,BASE_H);
 
-  // Title shows level 1 background
+  // Title shows first bg
   if(GAME.state==='title'){
-    const lv0 = GAME.levels[0];
-    if (lv0) drawTiled(lv0.img, 0);
+    const bg0 = GAME.bgs[0];
+    if(bg0) drawTiled(bg0, 0);
     drawUI();
     return;
   }
 
-  // Background
-  const lv = currentLevel();
-  if (lv) drawTiled(lv.img, GAME.scrollX);
+  const bg = currentBg();
+  if (bg) drawTiled(bg, GAME.scrollX);
 
   // Ground
   ctx.fillStyle='#2e2e2e';
   ctx.fillRect(0, ipx(182), BASE_W, BASE_H - 182);
 
-  // Actors
+  // Draw actors
   if(GAME.player) GAME.player.draw(ctx);
   for(const e of GAME.enemies){ if(e.hp>0) e.draw(ctx); }
 
-  // UI overlays
   drawUI();
 }
 
-function drawUI(){
-  // Health bars
-  drawHealthBar(10, 10, 80, 8, GAME.player ? GAME.player.hp : 0, GAME.player ? GAME.player.maxHp : 1);
-  // Enemies: show total remaining
-  let alive = 0; for(const e of GAME.enemies) if(e.hp>0) alive++;
-  drawHealthBar(BASE_W-90, 10, 80, 8, alive, Math.max(alive, 1));
-}
-
-function drawHealthBar(x,y,w,h,hp,maxHp){
-  const pct = Math.max(0, Math.min(1, hp / maxHp));
-  ctx.fillStyle = '#111'; ctx.fillRect(ipx(x-1), ipx(y-1), w+2, h+2);
-  ctx.fillStyle = '#4a0'; ctx.fillRect(ipx(x), ipx(y), Math.floor(w*pct), h);
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(ipx(x), ipx(y), w, h);
-}
-
-// Sword hitbox based on player facing; a thin rectangle ahead of body
+// -------------------- Combat helpers -------------------
 function playerSwordHitbox(p){
   const reach = 30, height = 18;
   if(!p.flipX){
@@ -469,23 +417,32 @@ function playerSwordHitbox(p){
     return { x: p.x - 6 - reach, y: p.y - 36, w: reach, h: height };
   }
 }
-
-// AABB overlap
 function overlap(a,b){
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
-
-// Apply damage and small knockback
 function damageActor(a, dmg, knockVx){
   a.hp = Math.max(0, a.hp - dmg);
   a.invulnT = 0.35;
   a.vx = knockVx;
   a.vy = -60;
   a.onGround = false;
-  a.play('hurt', true);
+  if (a.anims.has('hurt')) a.play('hurt', true);
 }
 
-// Tile background image across the width with an x-offset (scroll)
+// -------------------- UI -------------------------------
+function drawUI(){
+  drawHealthBar(10, 10, 80, 8, GAME.player ? GAME.player.hp : 0, GAME.player ? GAME.player.maxHp : 1);
+  let alive = 0; for(const e of GAME.enemies) if(e.hp>0) alive++;
+  drawHealthBar(BASE_W-90, 10, 80, 8, alive, Math.max(alive, 1));
+}
+function drawHealthBar(x,y,w,h,hp,maxHp){
+  const pct = Math.max(0, Math.min(1, hp / maxHp));
+  ctx.fillStyle = '#111'; ctx.fillRect(ipx(x-1), ipx(y-1), w+2, h+2);
+  ctx.fillStyle = '#4a0'; ctx.fillRect(ipx(x), ipx(y), Math.floor(w*pct), h);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(ipx(x), ipx(y), w, h);
+}
+
+// -------------------- BG tiling ------------------------
 function drawTiled(img, scroll){
   if(!img) return;
   const scale = BASE_H / img.height;
@@ -497,7 +454,14 @@ function drawTiled(img, scroll){
   }
 }
 
-function currentLevel(){ return GAME.levels[GAME.levelIndex] || null; }
+// -------------------- Start ----------------------------
+function startGame(){
+  if(GAME.state!=='play'){
+    GAME.state='play';
+    titleOverlay.classList.add('hidden');
+    document.getElementById('touch-controls')?.classList.remove('hidden');
+  }
+}
 
-// -------------------- Go -------------------------------
 boot();
+requestAnimationFrame(loop);
