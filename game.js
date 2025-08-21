@@ -1,14 +1,15 @@
 /* =========================================================
-   Usagi Prototype – Pixel Perfect + Mobile + Fixed Anim Map
-   Canonical sheet: assets/snes_usagi_sprite_sheet.png
-   Frame size: 64x64, Grid: 16 columns (auto-detect still works)
+   Usagi Prototype – Pixel-Perfect + Mobile Clusters
+   - Integer scaling; smoothing disabled
+   - Touch controls grouped & auto-sized (no overlap)
+   - Same sprite fixes (no halo/bleed/jitter)
    ========================================================= */
 
 const BASE_W = 256, BASE_H = 224;
 
-const root = document.getElementById('game-root');
+const root   = document.getElementById('game-root');
 const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
+const ctx    = canvas.getContext('2d', { alpha: true, desynchronized: true });
 
 const titleOverlay  = document.getElementById('title-overlay');
 const reportOverlay = document.getElementById('report-overlay');
@@ -31,15 +32,22 @@ function resizeCanvas() {
   const w = BASE_W * scale, h = BASE_H * scale;
   canvas.style.width  = w + 'px';
   canvas.style.height = h + 'px';
-  root.style.width = canvas.style.width;
+  root.style.width  = canvas.style.width;
   root.style.height = canvas.style.height;
+
+  // ---- Responsive touch control sizing ----
+  const shortest = Math.min(w, h);
+  const btn = Math.max(48, Math.min(96, Math.floor(shortest / 6))); // 48–96px
+  const gap = Math.max(10, Math.floor(btn * 0.25));
+  root.style.setProperty('--btn', `${btn}px`);
+  root.style.setProperty('--gap', `${gap}px`);
 }
 addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
 const ipx = n => Math.round(n);
 
-// -------------------------------- Assets ----------------
+// -------------------- Assets ---------------------------
 const ASSETS = {
   backgrounds: [
     'assets/background1.png',
@@ -49,7 +57,6 @@ const ASSETS = {
     'assets/background_stage2.png',
     'assets/background_stage3.png'
   ],
-  // Put our preferred sheet FIRST so we use it when available
   usagiSheets: [
     'assets/snes_usagi_sprite_sheet.png',       // 1024x1536 (64x64)
     'assets/usagi_snes_sheet.png',              // 1024x1536 (64x64)
@@ -97,18 +104,18 @@ function detectGrid(img) {
   throw new Error(`Unable to detect grid for ${img.width}x${img.height}`);
 }
 
-// -------------------------------- Sprites ---------------
+// -------------------- Sprites --------------------------
 class SpriteSheet {
   constructor(img, fw, fh, cols, margin=0, spacing=0) {
-    this.img = img; this.fw = fw; this.fh = fh; this.cols = cols;
-    this.margin = margin; this.spacing = spacing;
-    this.safeInset = 0.01; // guard against neighbor bleed
+    this.img=img; this.fw=fw; this.fh=fh; this.cols=cols;
+    this.margin=margin; this.spacing=spacing;
+    this.safeInset=0.01; // bleed guard
   }
   srcRect(i) {
     const col = i % this.cols, row = Math.floor(i / this.cols);
     const s = this.spacing, m = this.margin, inset = this.safeInset;
-    let sx = m + col * (this.fw + s) + inset;
-    let sy = m + row * (this.fh + s) + inset;
+    const sx = m + col * (this.fw + s) + inset;
+    const sy = m + row * (this.fh + s) + inset;
     return { sx, sy, sw: this.fw - inset*2, sh: this.fh - inset*2 };
   }
 }
@@ -171,7 +178,7 @@ class Sprite {
   }
 }
 
-// -------------------------------- Input -----------------
+// -------------------- Input -----------------------------
 const input = { left:false, right:false, jump:false, attack:false, debug:false };
 function handleKey(e, down){
   const k=e.code;
@@ -190,7 +197,7 @@ addEventListener('keyup',   e=>handleKey(e,false),{passive:false});
   root.addEventListener(ev, ()=>{ if(GAME.state==='title') startGame(); }, {passive:true});
 });
 
-// Touch buttons
+// Touch buttons (hold-to-press)
 function bindHold(id, setFlag){
   const el=document.getElementById(id); if(!el) return;
   const on = e=>{ e.preventDefault(); setFlag(true); };
@@ -205,7 +212,7 @@ bindHold('btn-right', v=>input.right=v);
 bindHold('btn-jump',  v=>input.jump=v);
 bindHold('btn-attack',v=>input.attack=v);
 
-// -------------------------------- Game State ------------
+// -------------------- Game State ------------------------
 const GAME = {
   state: 'boot',
   report: [],
@@ -214,14 +221,8 @@ const GAME = {
   enemy: null
 };
 
-/* ======== HARD-WIRED ANIMATION MAP (16 columns per row) ========
-   Assumed layout on snes_usagi_sprite_sheet.png:
-   Row 0: idle  (frames 0..3)
-   Row 1: run   (frames 16..21)
-   Row 2: jump  (frames 32..35)
-   Row 3: attack(frames 48..51)
-   If your sheet differs, just change arrays below.
-================================================================= */
+/* Hard-wired animation map for 16 cols per row.
+   Adjust these indices to match your sheet if needed. */
 const ANIMS = {
   idle:   { frames:[  0,  1,  2,  3],           fps:6,  loop:true  },
   run:    { frames:[ 16, 17, 18, 19, 20, 21],   fps:10, loop:true  },
@@ -235,7 +236,7 @@ function loop(now){
   update(dt); render(); requestAnimationFrame(loop);
 }
 
-// -------------------------------- Boot ------------------
+// -------------------- Boot ------------------------------
 async function boot(){
   try{
     try{ GAME.bgImg = await loadFirstAvailableImage(ASSETS.backgrounds, GAME.report); }
@@ -253,7 +254,7 @@ async function boot(){
     p.play('idle', true);
     GAME.player = p;
 
-    // Optional enemy check
+    // Optional enemy sanity-check
     try{
       const eimg = await loadImage(ASSETS.enemySheet);
       GAME.report.push(`OK   ${ASSETS.enemySheet} (${eimg.width}x${eimg.height})`);
@@ -267,6 +268,7 @@ async function boot(){
 
     const hadMiss = GAME.report.some(r=>r.startsWith('MISS')||r.startsWith('Fatal'));
     if(hadMiss){ reportLogEl.textContent = GAME.report.join('\n'); reportOverlay.classList.remove('hidden'); }
+
     GAME.state = 'title';
     titleOverlay.classList.remove('hidden');
   } catch (e) {
@@ -286,7 +288,7 @@ function startGame(){
   }
 }
 
-// -------------------------------- Update/Render ---------
+// -------------------- Update/Render ---------------------
 function update(dt){
   if(GAME.state!=='play') return;
   if(GAME.player) GAME.player.update(dt, input);
@@ -309,5 +311,5 @@ function render(){
   if(GAME.enemy)  GAME.enemy.draw(ctx);
 }
 
-// -------------------------------- Start -----------------
+// -------------------- Go -------------------------------
 boot();
