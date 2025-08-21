@@ -1,101 +1,59 @@
-:root {
-  --btn: 84px;
-  --gap: 18px;
-  -webkit-tap-highlight-color: transparent;
+body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  font-family: 'Arial', sans-serif;
+  overflow: hidden;
+  text-align: center;
 }
 
-* { box-sizing: border-box; }
-html, body {
-  margin: 0; height: 100%;
-  background:#0b0b0b; color:#fff;
-  font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans";
-  touch-action: none;
+.screen {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(#052743, #000);
+  z-index: 10;
 }
 
-.root { position: relative; margin: 0 auto; display:flex; align-items:center; justify-content:center; padding: 16px; }
-
-canvas {
-  image-rendering: pixelated; image-rendering: crisp-edges;
-  background:#000; border-radius: 14px;
-  box-shadow: 0 12px 40px rgba(0,0,0,.6);
+.game-title {
+  font-size: 3rem;
+  color: #f5e6b3;
+  margin: 0;
+  text-shadow: 2px 2px #000;
+}
+.subtitle {
+  font-size: 1.5rem;
 }
 
-/* ---------- Title Screen ---------- */
-.title {
-  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  overflow:hidden; z-index: 50; pointer-events:auto;
+#start-button {
+  margin-top: 20px;
+  padding: 10px 20px;
+  font-size: 1.2rem;
+  border-radius: 12px;
+  border: none;
+  background: #f78c1f;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0px 4px #b35400;
 }
-.title.hidden { display:none; }
-.title .title__bg {
-  position:absolute; inset:0;
-  background: #133a5a url("assets/title/title_bg.png") center/cover no-repeat;
-  filter: saturate(100%) contrast(105%);
-}
-.title .title__scrim {
-  position:absolute; inset:0;
-  background: radial-gradient(ellipse at center, rgba(0,0,0,.25) 0%, rgba(0,0,0,.65) 70%);
-}
-.title .title__content {
-  position: relative; text-align:center; padding: 16px; z-index: 2;
+#start-button:active {
+  transform: translateY(2px);
+  box-shadow: 0px 2px #b35400;
 }
 
-/* Pixel-ish logo treatment */
-.logo {
-  margin: 0 0 10px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  font-weight: 900;
-  line-height: .9;
-}
-.logo__usagi {
-  display:block;
-  font-size: clamp(44px, 12vw, 120px);
-  color: #F3E4B5;
-  text-shadow:
-    0 1px 0 #201a0e,
-    0 2px 0 #201a0e,
-    0 3px 0 #201a0e,
-    0 4px 0 #201a0e;
-  filter: drop-shadow(0 10px 12px rgba(0,0,0,.45));
-}
-.logo__yojimbo {
-  display:block;
-  margin-top: .2em;
-  font-size: clamp(18px, 5.2vw, 48px);
-  color: #F3E4B5;
-  letter-spacing: 2px;
-  filter: drop-shadow(0 6px 8px rgba(0,0,0,.45));
+.instructions {
+  color: #ddd;
+  margin-top: 10px;
 }
 
-kbd { background:#222; border:1px solid #444; border-bottom-color:#111; padding:2px 6px; border-radius:4px; }
-
-.btn {
-  appearance:none; border:0; border-radius:14px; padding:12px 18px;
-  font-weight:800; letter-spacing:.4px; cursor:pointer;
-}
-.btn--primary {
-  background:#f08a00; color:#1c1200;
-  box-shadow: 0 6px 18px rgba(240,138,0,.35), inset 0 -3px 0 rgba(0,0,0,.2);
-}
-.btn--primary:active { transform: translateY(1px); box-shadow: 0 3px 10px rgba(240,138,0,.3); }
-
-.title__hint { margin-top: 8px; opacity:.9; }
-
-/* ---------- Touch controls ---------- */
-.touch { position:absolute; inset:0; pointer-events:none; z-index:40; }
-.tc {
-  position:absolute; width:var(--btn); height:var(--btn); border-radius:18px;
-  background: rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12);
-  backdrop-filter: blur(6px); pointer-events:auto;
-}
-.tc-left   { left: var(--gap); bottom: var(--gap); }
-.tc-right  { left: calc(var(--gap) + var(--btn) + var(--gap)); bottom: var(--gap); }
-.tc-jump   { right: calc(var(--gap) + var(--btn) + var(--gap)); bottom: var(--gap); }
-.tc-attack { right: var(--gap); bottom: var(--gap); }
-
-/* ---------- HUD log ---------- */
-.hud-log {
-  position:absolute; top:10px; left:10px; z-index:45;
-  font: 10px/1.3 monospace; white-space:pre-wrap; max-width: 95%;
-  padding:6px 8px; background:rgba(0,0,0,.45); border-radius:6px; border:1px solid rgba(255,255,255,.12);
+#gameCanvas {
+  display: none;
+  background: #87ceeb;
 }
