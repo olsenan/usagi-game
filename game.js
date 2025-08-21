@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const BASE_W = 256, BASE_H = 224;
-  const VERSION = 8;
+  const VERSION = 'atlas2';
 
   // DOM
   const root = document.getElementById('root');
@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadText  = document.getElementById('load-text');
   const touchUI   = document.getElementById('touch');
   const hud       = document.getElementById('hud');
-  const log = (...a)=>{ const s=a.join(' '); console.log(s); hud.textContent=(hud.textContent+'\n'+s).trim().slice(-1000); };
+  const log = (...a)=>{ const s=a.join(' '); console.log(s); hud.textContent=(hud.textContent+'\n'+s).trim().slice(-1200); };
 
   /* ---------- layout ---------- */
   function resize() {
@@ -40,10 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById(id); if(!el) return;
     const down = e=>{ e.preventDefault(); setter(true); };
     const up   = e=>{ e.preventDefault(); setter(false); };
-    el.addEventListener('pointerdown', down, { passive:false });
-    el.addEventListener('pointerup',   up,   { passive:false });
-    el.addEventListener('pointercancel', up, { passive:false });
-    el.addEventListener('pointerleave',  up, { passive:false });
+    ['pointerdown','pointerup','pointercancel','pointerleave'].forEach(ev=>el.addEventListener(ev, ev.includes('down')?down:up, {passive:false}));
   }
   hold('left', v=>input.left=v);
   hold('right',v=>input.right=v);
@@ -65,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(['KeyJ','KeyK','KeyZ','KeyX'].includes(k)) input.attack=false;
   }, { passive:false });
 
-  /* ---------- state ---------- */
+  /* ---------- title->loading ---------- */
   let state = 'TITLE';
   const startRequest = (e)=>{
     e?.preventDefault?.();
@@ -81,163 +78,154 @@ document.addEventListener('DOMContentLoaded', () => {
     uiTitle.addEventListener(ev,startRequest,{passive:false});
   });
 
-  /* ---------- loader with candidate paths ---------- */
-  const MANIFEST_PATH = `assets/manifest/manifest.json?v=${VERSION}`;
-  let manifest = null;
-  const images = new Map();
-  const missing = [];
+  /* ---------- loader (atlas + maps) ---------- */
+  const PATHS = {
+    // sprite atlases
+    usagiAtlas:  'assets/sprites/usagi.png',
+    usagiMap:    'assets/sprites/usagi_map.json',
+    ninjasAtlas: 'assets/sprites/ninjas.png',
+    ninjasMap:   'assets/sprites/ninjas_map.json',
+    // UI
+    ui: {
+      left:  'assets/ui/ui_left.png',
+      right: 'assets/ui/ui_right.png',
+      jump:  'assets/ui/ui_jump.png',
+      attack:'assets/ui/ui_attack.png'
+    },
+    // backgrounds
+    backgrounds: Array.from({length:6}, (_,i)=>`assets/background/background${i+1}.png`)
+  };
 
-  function cacheBust(url){ return url + (url.includes('?')?'&':'?') + 'v=' + VERSION; }
-  function loadImage(path){
-    return new Promise(resolve=>{
-      const img=new Image();
-      img.onload = ()=>resolve({ok:true, path, img});
-      img.onerror= ()=>resolve({ok:false, path, img:null});
-      img.src = cacheBust(path);
-    });
-  }
+  const images = new Map();
+  const jsons  = new Map();
+  function cb(u){ return u + (u.includes('?')?'&':'?') + 'v=' + VERSION; }
+  function loadImage(path){ return new Promise(res=>{ const img=new Image(); img.onload=()=>res({ok:true,path,img}); img.onerror=()=>res({ok:false,path}); img.src=cb(path); }); }
+  async function loadJSON(path){ try{ const r=await fetch(cb(path),{cache:'no-store'}); if(!r.ok) return {ok:false,path}; const j=await r.json(); return {ok:true,path,json:j}; } catch{ return {ok:false,path}; } }
 
   async function bootstrap(){
-    // Load manifest
-    try{
-      const res = await fetch(MANIFEST_PATH,{cache:'no-store'});
-      manifest = res.ok ? await res.json() : null;
-    }catch{ /* ignore */ }
-
-    // Gather all candidate paths
-    const paths = [];
-    const candidatesByKey = {}; // key -> [candidates]
-    const addCandidate = (key, cand) => {
-      const arr = Array.isArray(cand) ? cand : [cand];
-      candidatesByKey[key] = (candidatesByKey[key]||[]).concat(arr);
-      paths.push(...arr);
-    };
-
-    if (manifest) {
-      for (const group of Object.keys(manifest)) {
-        for (const anim of Object.keys(manifest[group])) {
-          const m = manifest[group][anim];
-          const key = `${group}.${anim}`;
-          addCandidate(key, m.src);
-        }
-      }
-    }
-
-    // Backgrounds + UI icons
-    for(let i=1;i<=6;i++) paths.push(`assets/background/background${i}.png`);
-    const UI_ICONS = {
-      left:'assets/ui/ui_left.png', right:'assets/ui/ui_right.png',
-      jump:'assets/ui/ui_jump.png', attack:'assets/ui/ui_attack.png'
-    };
-    paths.push(...Object.values(UI_ICONS));
-
-    // Preload
-    const total = paths.length; let done=0;
-    const tick=()=>{ const pct= total? Math.round(done/total*100):100; barFill.style.width=pct+'%'; loadText.textContent=`Loaded images: ${done} / ${total}`; };
+    const queue = [
+      loadImage(PATHS.usagiAtlas), loadJSON(PATHS.usagiMap),
+      loadImage(PATHS.ninjasAtlas),loadJSON(PATHS.ninjasMap),
+      ...Object.values(PATHS.ui).map(loadImage),
+      ...PATHS.backgrounds.map(loadImage)
+    ];
+    let done=0,total=queue.length; const tick=()=>{ const pct = Math.round(done/total*100); barFill.style.width=pct+'%'; loadText.textContent=`Loaded: ${done} / ${total}`; };
     tick();
-    const results = await Promise.allSettled(paths.map(p=>loadImage(p).then(r=>{done++;tick();return r;})));
+    const results = await Promise.all(queue.map(p=>p.then(r=>{done++;tick();return r;})));
     for(const r of results){
-      if(r.status==='fulfilled' && r.value.ok){
-        images.set(r.value.path, r.value.img);
-        // also allow lookup without query
-        const clean = r.value.path.split('?')[0];
-        images.set(clean, r.value.img);
-      }else if(r.status==='fulfilled'){
-        missing.push(r.value.path.split('?')[0]);
-      }
+      if(!r.ok) continue;
+      if('img' in r) images.set(r.path, r.img);
+      if('json' in r) jsons.set(r.path, r.json);
     }
 
-    // Resolve the chosen candidate per sheet (first that exists)
-    const resolved = {};
-    for(const key of Object.keys(candidatesByKey)){
-      const arr = candidatesByKey[key];
-      resolved[key] = arr.find(p=>images.has(p)) || null;
-    }
-
-    // Apply UI icons
-    const setIcon = (id, path, fallback)=>{
-      const el=document.getElementById(id);
-      if(images.has(path)) el.style.setProperty('--icon-url', `url("${cacheBust(path)}")`);
-      else { el.textContent=fallback; el.style.fontWeight='900'; el.style.fontSize=Math.floor(parseInt(getComputedStyle(el).width)*0.45)+'px'; }
+    // Set touch icons (fallback glyphs if missing)
+    const setIcon = (id, path, glyph)=>{
+      const el = document.getElementById(id);
+      if(images.has(path)) el.style.setProperty('--icon-url', `url("${cb(path)}")`);
+      else { el.textContent=glyph; el.style.fontWeight='900'; el.style.fontSize=Math.floor(parseInt(getComputedStyle(el).width)*0.45)+'px'; }
     };
-    setIcon('left',UI_ICONS.left,'◀'); setIcon('right',UI_ICONS.right,'▶');
-    setIcon('jump',UI_ICONS.jump,'▲'); setIcon('attack',UI_ICONS.attack,'✕');
+    setIcon('left',PATHS.ui.left,'◀'); setIcon('right',PATHS.ui.right,'▶');
+    setIcon('jump',PATHS.ui.jump,'▲'); setIcon('attack',PATHS.ui.attack,'✕');
 
-    // Report what we’ll actually use
-    const loadedUsagi = Object.entries(resolved).filter(([k,v])=>k.startsWith('usagi.') && v).map(([k,v])=>`${k.split('.')[1]}←${v}`);
-    const loadedNinja = Object.entries(resolved).filter(([k,v])=>k.startsWith('ninja.') && v).map(([k,v])=>`${k.split('.')[1]}←${v}`);
-    log('Usagi sheets:', loadedUsagi.length?('\n  '+loadedUsagi.join('\n  ')):' none');
-    log('Ninja sheets:', loadedNinja.length?('\n  '+loadedNinja.join('\n  ')):' none');
-
-    // Build actors from resolved sheets
-    buildFromResolved(resolved);
+    // Build sprite sets
+    buildSprites();
 
     uiLoading.classList.remove('visible');
     touchUI.classList.remove('hidden');
     state='PLAY';
   }
 
-  /* ---------- sprites ---------- */
-  class StripSheet{
-    constructor(img,fw,fh,frames){ this.img=img; this.fw=fw; this.fh=fh; this.frames=frames||1; }
-    rect(i){ const j=Math.max(0,Math.min(this.frames-1,i|0)); return {sx:j*this.fw+0.01, sy:0.01, sw:this.fw-0.02, sh:this.fh-0.02}; }
+  /* ---------- sprites from atlas ---------- */
+  function buildFrameIndex(mapJson){
+    const frames = mapJson?.frames || {};
+    const idx = {};
+    for(const [k,v] of Object.entries(frames)){ idx[k] = { x:v.x, y:v.y, w:v.w, h:v.h }; }
+    return idx;
   }
-  class Animation{
-    constructor(frames,fps=8,loop=true){ this.frames=frames; this.fps=fps; this.loop=loop; this.t=0; this.i=0; this.done=false; }
-    step(dt){ if(this.done) return; this.t+=dt; const adv=(this.t*this.fps)|0; if(adv>0){ this.t-=adv/this.fps; this.i+=adv; if(this.i>=this.frames.length){ if(this.loop) this.i%=this.frames.length; else { this.i=this.frames.length-1; this.done=true; } } } }
-    cur(){ return this.frames[Math.min(this.i,this.frames.length-1)]; }
-    reset(){ this.t=0; this.i=0; this.done=false; }
+
+  class AtlasAnim {
+    constructor(atlas, frameRects, order, fps=8, loop=true){
+      this.atlas=atlas; this.frameRects=frameRects; this.order=order; this.fps=fps; this.loop=loop;
+      this.t=0; this.i=0; this.done=false;
+    }
+    step(dt){ if(this.done) return; this.t+=dt; const adv=(this.t*this.fps)|0; if(adv>0){ this.t-=adv/this.fps; this.i+=adv; if(this.i>=this.order.length){ if(this.loop) this.i%=this.order.length; else { this.i=this.order.length-1; this.done=true; } } } }
+    curRect(){ return this.frameRects[this.order[this.i]]; }
   }
+
   class Actor{
-    constructor(){ this.x=80; this.y=180; this.vx=0; this.vy=0; this.onGround=true; this.flip=false; this.scale=1; this.speed=46; this.jumpV=-130; this.gravity=340; this.anims=new Map(); this.cur=null; this.shadow=true; }
-    add(name,sheet,fps=8,loop=true){ const frames=Array.from({length:sheet.frames},(_,i)=>i); this.anims.set(name,{sheet,anim:new Animation(frames,fps,loop)}); }
-    has(n){ return this.anims.has(n); }
-    play(n,restart=false){ if(!this.has(n)) return; if(this.cur!==n||restart){ this.anims.get(n).anim.reset(); this.cur=n; } }
+    constructor(){ this.x=80; this.y=180; this.vx=0; this.vy=0; this.onGround=true; this.flip=false; this.scale=0.9; this.speed=46; this.jumpV=-130; this.gravity=340; this.anims={}; this.cur=null; this.shadow=true; }
+    add(name,anim){ this.anims[name]=anim; }
+    has(name){ return !!this.anims[name]; }
+    play(name,restart=false){ if(!this.has(name)) return; if(this.cur!==name||restart){ this.anims[name].t=0; this.anims[name].i=0; this.anims[name].done=false; this.cur=name; } }
     update(dt){
       this.x+=this.vx*dt; this.vy+=this.gravity*dt; this.y+=this.vy*dt;
       if(this.y>=180){ this.y=180; this.vy=0; this.onGround=true; }
-      if(this.cur) this.anims.get(this.cur).anim.step(dt);
+      if(this.cur) this.anims[this.cur].step(dt);
     }
     draw(ctx){
       if(!this.cur){ ctx.fillStyle='#7cf'; ctx.fillRect(this.x-8,this.y-28,16,28); return; }
-      const {sheet,anim}=this.anims.get(this.cur); const f=anim.cur(); const r=sheet.rect(f);
-      const dw=sheet.fw*this.scale, dh=sheet.fh*this.scale;
+      const a=this.anims[this.cur]; const r=a.curRect();
+      const dw=r.w*this.scale, dh=r.h*this.scale;
       if(this.shadow){ const shw=(dw*0.55)|0, shh=(dh*0.15)|0; ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect((this.x-(shw>>1))|0,(this.y-2)|0,shw,shh); }
       ctx.save(); ctx.translate(this.x|0,this.y|0); if(this.flip) ctx.scale(-1,1);
-      ctx.drawImage(sheet.img, r.sx,r.sy,r.sw,r.sh, (-dw*0.5)|0, (-dh)|0, dw|0, dh|0);
+      ctx.drawImage(a.atlas, r.x+0.01, r.y+0.01, r.w-0.02, r.h-0.02, (-dw*0.5)|0, (-dh)|0, dw|0, dh|0);
       ctx.restore();
     }
   }
 
   const player=new Actor(); const enemies=[];
-  function buildFromResolved(resolved){
-    const mk = (key,fw,fh,frames)=>{ const path=resolved[key]; if(!path) return null; const img = images.get(path) || images.get(path.split('?')[0]); if(!img) return null; return new StripSheet(img, fw, fh, frames); };
+  function buildSprites(){
+    const usagiAtlas = images.get('assets/sprites/usagi.png');
+    const usagiMap   = jsons.get('assets/sprites/usagi_map.json');
+    const ninAtlas   = images.get('assets/sprites/ninjas.png');
+    const ninMap     = jsons.get('assets/sprites/ninjas_map.json');
 
-    // Usagi candidates are 64x64 frames by design
-    const usagiIdle = mk('usagi.idle',64,64,4);
-    const usagiWalk = mk('usagi.walk',64,64,6);
-    if(usagiIdle) player.add('idle',usagiIdle,6,true);
-    if(usagiWalk) player.add('walk',usagiWalk,10,true);
-    if(player.has('idle')) player.play('idle'); else if(player.has('walk')) player.play('walk');
+    const uiSummary = [];
+    if(usagiAtlas && usagiMap){
+      const idx = buildFrameIndex(usagiMap);
+      const mk = (names, fps, loop)=> new AtlasAnim(usagiAtlas, idx, names.filter(n=>idx[n]), fps, loop);
+      const idle  = mk(['idle0','idle1','idle2','idle1'], 6, true);
+      const walk  = mk(['walk0','walk1','walk2','walk3','walk4','walk5'], 10, true);
+      const jump  = mk(['jump0','jump1'], 10, false) || idle;
+      const atk   = mk(['attack0','attack1','attack2','attack3','attack4','attack5'], 12, false) || walk;
+      if(idle) player.add('idle', idle);
+      if(walk) player.add('walk', walk);
+      if(jump) player.add('jump', jump);
+      if(atk)  player.add('attack', atk);
+      player.play(player.has('idle')?'idle':'walk');
+      uiSummary.push('usagi:atlas');
+    } else uiSummary.push('usagi:missing');
 
-    // Ninja (idle only for zero-error build)
-    const ninIdle = mk('ninja.idle',64,64,4);
-    const e = new Actor();
-    if(ninIdle){ e.add('idle',ninIdle,6,true); e.play('idle'); }
-    e.x=180; e.y=180; enemies.push(e);
+    if(ninAtlas && ninMap){
+      const idx = buildFrameIndex(ninMap);
+      const mk = (names,fps,loop)=> new AtlasAnim(ninAtlas, idx, names.filter(n=>idx[n]), fps, loop);
+      const nIdle = mk(['black_idle_0'], 4, true);
+      const nWalk = mk(['black_walk1_1','black_walk2_2','black_walk1_6','black_walk2_7'], 8, true);
+      const nAtk  = mk(['black_attack1_3','black_attack2_4'], 10, true);
+      const e = new Actor();
+      if(nIdle) e.add('idle',nIdle);
+      if(nWalk) e.add('walk',nWalk);
+      if(nAtk)  e.add('attack',nAtk);
+      e.play(nIdle?'idle':'walk'); e.x=180; e.y=180; enemies.push(e);
+      uiSummary.push('ninja:atlas');
+    } else uiSummary.push('ninja:missing');
+
+    log('Sprites:', uiSummary.join(' | '));
   }
 
   /* ---------- game loop ---------- */
   let last=0, scroll=0;
   function update(dt){
     if(state!=='PLAY') return;
+
     if(input.left){ player.vx=-player.speed; player.flip=true; }
     else if(input.right){ player.vx=player.speed; player.flip=false; }
     else player.vx=0;
 
-    if(input.jump && player.onGround){ player.vy=player.jumpV; player.onGround=false; }
+    if(input.jump && player.onGround){ player.vy=-130; player.onGround=false; player.play('jump',true); }
+    if(input.attack && player.has('attack')) player.play('attack',true);
 
-    const busy = player.cur && !player.anims.get(player.cur).anim.loop;
+    const busy = player.cur && !player.anims[player.cur].loop;
     if(!busy){
       if(!player.onGround && player.has('jump')) player.play('jump');
       else if(Math.abs(player.vx)>0 && player.has('walk')) player.play('walk');
@@ -245,11 +233,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     player.update(dt);
-    enemies.forEach(e=>{ e.update(dt); });
+    enemies.forEach(e=>e.update(dt));
     scroll = (scroll + dt*18) % 512;
   }
+
   function render(){
     ctx.clearRect(0,0,BASE_W,BASE_H);
+
     // background
     let bgImg=null;
     for(let i=1;i<=6;i++){ const p=`assets/background/background${i}.png`; if(images.get(p)){ bgImg=images.get(p); break; } }
@@ -261,11 +251,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }else{ ctx.fillStyle='#203529'; ctx.fillRect(0,0,BASE_W,BASE_H); }
     ctx.fillStyle='#2e2e2e'; ctx.fillRect(0,182,BASE_W,BASE_H-182);
 
-    player.draw(ctx);
-    enemies.forEach(e=>e.draw(ctx));
-
-    if(missing.length){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(6,6,180,18); ctx.fillStyle='#fff'; ctx.font='10px monospace'; ctx.fillText(`Missing: ${missing.length}`,10,18); }
+    player.draw(ctx); enemies.forEach(e=>e.draw(ctx));
   }
+
   function loop(t){ const dt=Math.min(0.05,(t-last)/1000)||0.0167; last=t; update(dt); render(); requestAnimationFrame(loop); }
   requestAnimationFrame(loop);
 });
