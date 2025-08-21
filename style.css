@@ -1,45 +1,45 @@
-:root { --btn:84px; --gap:18px; -webkit-tap-highlight-color:transparent; }
-*{box-sizing:border-box}
-html,body{margin:0;height:100%;background:#0b0b0b;color:#fff;font-family:system-ui,Segoe UI,Roboto,Arial;touch-action:none}
-body{display:flex;min-height:100vh}
-#root{position:relative;margin:auto;display:flex;justify-content:center;align-items:center;width:100vw;height:100vh;max-width:100%;max-height:100%;overflow:hidden;padding:16px}
-canvas{image-rendering:pixelated;image-rendering:crisp-edges;background:#000;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.6)}
-
-.overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:auto;z-index:50}
-.overlay.visible{display:flex}
-.title-bg{position:absolute;inset:0;background:#133a5a url(assets/title/title_bg_new.png) center/cover no-repeat;filter:saturate(105%)}
-.panel{position:relative;z-index:1;width:min(92vw,520px);background:rgba(20,22,26,.9);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:24px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.55)}
-.logo{margin:0 0 10px;font-weight:900;line-height:.9;letter-spacing:.5px}
-.logo span{display:block;font-size:clamp(42px,12vw,110px);color:#f3e4b5;text-shadow:0 2px 0 #1c1400,0 6px 16px rgba(0,0,0,.45)}
-.logo em{display:block;margin-top:.15em;font-style:normal;font-size:clamp(18px,5vw,42px);color:#f3e4b5;letter-spacing:2px;text-shadow:0 6px 12px rgba(0,0,0,.45)}
-.btn{appearance:none;border:0;border-radius:14px;padding:12px 18px;background:#f08a00;color:#1c1200;font-weight:800;cursor:pointer;box-shadow:0 6px 18px rgba(240,138,0,.35),inset 0 -3px 0 rgba(0,0,0,.2)}
-.btn:active{transform:translateY(1px);box-shadow:0 3px 10px rgba(240,138,0,.3)}
-.hint{opacity:.9}
-.small{opacity:.7;font-size:.9rem}
-
-.heading{margin:0 0 10px}
-.bar{width:min(84vw,440px);height:14px;border-radius:9px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);margin:6px auto 10px;overflow:hidden}
-#bar-fill{height:100%;width:0%;background:#4c7cf4}
-kbd{background:#222;border:1px solid #444;border-bottom-color:#111;padding:2px 6px;border-radius:4px}
-
-/* Touch controls */
-.touch{position:absolute;inset:0;pointer-events:none;z-index:40}
-.tc{
-  position:absolute;width:var(--btn);height:var(--btn);
-  border-radius:18px;background:rgba(16,24,28,.65);
-  border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(6px);
-  pointer-events:auto;display:grid;place-items:center;overflow:hidden;
+:root{
+  --bg:#0e0e11;
+  --panel:#1a1a20;
+  --text:#eaeaf0;
+  --accent:#6fa8ff;
 }
-.tc::after{
-  content:""; width:70%; height:70%;
-  background-image: var(--icon-url, none);
-  background-repeat:no-repeat; background-position:center; background-size:contain;
-  opacity:.95; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));
-}
-.tc-left{left:var(--gap);bottom:var(--gap)}
-.tc-right{left:calc(var(--gap) + var(--btn) + var(--gap));bottom:var(--gap)}
-.tc-jump{right:calc(var(--gap) + var(--btn) + var(--gap));bottom:var(--gap)}
-.tc-attack{right:var(--gap);bottom:var(--gap)}
-.hidden{display:none!important}
 
-.hud{position:absolute;top:10px;left:10px;z-index:45;font:10px/1.3 monospace;white-space:pre-wrap;max-width:95%;padding:6px 8px;background:rgba(0,0,0,.45);border-radius:6px;border:1px solid rgba(255,255,255,.12)}
+/* Fill screen and center canvas */
+html,body{ height:100%; margin:0; background:var(--bg); color:var(--text); }
+#game-root{
+  position:relative; width:100vw; height:100vh;
+  display:grid; place-items:center; overflow:hidden;
+}
+
+/* Pixel-art friendly canvas */
+#game{
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background:
+    url('assets/ui/checker_16.png') repeat #d9d9df; /* optional; ignore if missing */
+  box-shadow: 0 10px 40px rgba(0,0,0,.6);
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* HUD buttons */
+#hud{
+  position:absolute; inset:auto 0 0 0; display:flex; justify-content:space-between;
+  padding:16px; gap:16px; pointer-events:auto;
+}
+.pad{ display:flex; gap:16px; }
+#hud button{
+  min-width:72px; min-height:72px; border-radius:18px; border:0; font-size:28px;
+  background:var(--panel); color:var(--text); box-shadow:0 6px 16px rgba(0,0,0,.35);
+}
+#hud button:active{ transform:translateY(1px); }
+
+/* Debug overlay */
+#overlay{
+  position:absolute; top:12px; left:12px;
+  background:rgba(20,20,24,.75); padding:8px 10px; border-radius:8px; color:#fafafa;
+  font-size:12px; line-height:1.25;
+  max-width: min(44ch, 40vw);
+}
+.mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
