@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const BASE_W = 256, BASE_H = 224;
-  const VERSION = 'atlas3';
+  const VERSION = 'strip1';
 
   // DOM
   const root = document.getElementById('root');
@@ -78,21 +78,20 @@ document.addEventListener('DOMContentLoaded', () => {
     uiTitle.addEventListener(ev,startRequest,{passive:false});
   });
 
-  /* ---------- loader (atlas + maps + ui + bg) ---------- */
+  /* ---------- loader ---------- */
   const PATHS = {
-    // sprite atlases
+    stripsManifest: 'assets/sprites/sprite_manifest.json',
+    // atlas fallback
     usagiAtlas:  'assets/sprites/usagi.png',
     usagiMap:    'assets/sprites/usagi_map.json',
     ninjasAtlas: 'assets/sprites/ninjas.png',
     ninjasMap:   'assets/sprites/ninjas_map.json',
-    // UI icons (exactly where your screenshot shows)
     ui: {
       left:  'assets/ui/ui_left.png',
       right: 'assets/ui/ui_right.png',
       jump:  'assets/ui/ui_jump.png',
       attack:'assets/ui/ui_attack.png'
     },
-    // backgrounds
     backgrounds: Array.from({length:6}, (_,i)=>`assets/background/background${i+1}.png`)
   };
 
@@ -103,15 +102,39 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadJSON(path){ try{ const r=await fetch(cb(path),{cache:'no-store'}); if(!r.ok) return {ok:false,path}; const j=await r.json(); return {ok:true,path,json:j}; } catch{ return {ok:false,path}; } }
 
   async function bootstrap(){
-    const queue = [
-      loadImage(PATHS.usagiAtlas), loadJSON(PATHS.usagiMap),
-      loadImage(PATHS.ninjasAtlas),loadJSON(PATHS.ninjasMap),
+    // Try strip manifest
+    const manifestRes = await loadJSON(PATHS.stripsManifest);
+    const usingStrips = manifestRes.ok && manifestRes.json && manifestRes.json.usagi && manifestRes.json.ninja;
+    if(usingStrips) jsons.set(PATHS.stripsManifest, manifestRes.json);
+
+    let queue = [
       ...Object.values(PATHS.ui).map(loadImage),
       ...PATHS.backgrounds.map(loadImage)
     ];
+
+    if(usingStrips){
+      const m = manifestRes.json;
+      const allSpriteDefs = [
+        ...Object.values(m.usagi),
+        ...Object.values(m.ninja)
+      ];
+      queue = [
+        ...queue,
+        ...allSpriteDefs.map(def=>loadImage(def.path))
+      ];
+    }else{
+      // Fallback to atlases
+      queue = [
+        ...queue,
+        loadImage(PATHS.usagiAtlas), loadJSON(PATHS.usagiMap),
+        loadImage(PATHS.ninjasAtlas), loadJSON(PATHS.ninjasMap)
+      ];
+    }
+
     let done=0,total=queue.length; const tick=()=>{ const pct = Math.round(done/total*100); barFill.style.width=pct+'%'; loadText.textContent=`Loaded: ${done} / ${total}`; };
     tick();
     const results = await Promise.all(queue.map(p=>p.then(r=>{done++;tick();return r;})));
+
     const missing=[];
     for(const r of results){
       if(!r.ok){ missing.push(r.path); continue; }
@@ -120,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if(missing.length){ log('Missing:', missing.length); missing.forEach(p=>log('  ',p)); } else { log('All assets loaded'); }
 
-    // Set touch icons (fallback glyphs if some icon missing)
+    // Set touch icons/fallback glyphs
     const setIcon = (id, path, glyph)=>{
       const el = document.getElementById(id);
       if(images.has(path)) el.style.setProperty('--icon-url', `url("${cb(path)}")`);
@@ -130,21 +153,95 @@ document.addEventListener('DOMContentLoaded', () => {
     setIcon('jump',PATHS.ui.jump,'▲'); setIcon('attack',PATHS.ui.attack,'✕');
 
     // Build sprites
-    buildSprites();
+    if(usingStrips) {
+      buildSpritesFromStrips(jsons.get(PATHS.stripsManifest));
+      log('Sprites: strips manifest');
+    } else {
+      buildSpritesFromAtlas();
+      log('Sprites: atlases (placeholder until you add strips)');
+    }
 
     uiLoading.classList.remove('visible');
     touchUI.classList.remove('hidden');
     state='PLAY';
   }
 
-  /* ---------- sprites from atlas ---------- */
+  /* ---------- strips mode ---------- */
+  function makeStripAnim(img, frames, fps=8, loop=true){
+    const frameW = Math.floor(img.width / frames);
+    const frameH = img.height;
+    const rects = Array.from({length:frames}, (_,i)=>({x:i*frameW,y:0,w:frameW,h:frameH}));
+    return new AtlasAnim(img, Object.fromEntries(rects.map((r,i)=>[i,r])), Array.from({length:frames}, (_,i)=>i), fps, loop);
+  }
+  function buildSpritesFromStrips(manifest){
+    const u = manifest.usagi, n = manifest.ninja;
+
+    const mk = def => images.has(def.path) ? makeStripAnim(images.get(def.path), def.frames, def.fps, !!def.loop) : null;
+
+    const idle   = mk(u.idle);
+    const walk   = mk(u.walk);
+    const jump   = mk(u.jump);
+    const attack = mk(u.attack);
+
+    if(idle)   player.add('idle', idle);
+    if(walk)   player.add('walk', walk);
+    if(jump)   player.add('jump', jump);
+    if(attack) player.add('attack', attack);
+    player.play(player.has('idle')?'idle':'walk');
+
+    const e = new Actor();
+    const nIdle   = mk(n.idle);
+    const nWalk   = mk(n.walk);
+    const nJump   = mk(n.jump);
+    const nAttack = mk(n.attack);
+    if(nIdle)   e.add('idle', nIdle);
+    if(nWalk)   e.add('walk', nWalk);
+    if(nJump)   e.add('jump', nJump);
+    if(nAttack) e.add('attack', nAttack);
+    e.play(nIdle?'idle':'walk'); e.x=180; e.y=180; enemies.push(e);
+  }
+
+  /* ---------- atlas fallback ---------- */
   function buildFrameIndex(mapJson){
     const frames = mapJson?.frames || {};
     const idx = {};
     for(const [k,v] of Object.entries(frames)){ idx[k] = { x:v.x, y:v.y, w:v.w, h:v.h }; }
     return idx;
   }
+  function buildSpritesFromAtlas(){
+    const usagiAtlas = images.get('assets/sprites/usagi.png');
+    const usagiMap   = jsons.get('assets/sprites/usagi_map.json');
+    const ninAtlas   = images.get('assets/sprites/ninjas.png');
+    const ninMap     = jsons.get('assets/sprites/ninjas_map.json');
 
+    if(usagiAtlas && usagiMap){
+      const idx = buildFrameIndex(usagiMap);
+      const mk = (names, fps, loop)=> new AtlasAnim(usagiAtlas, idx, names.filter(n=>idx[n]), fps, loop);
+      const idle  = mk(['idle0','idle1','idle2','idle1'], 6, true);
+      const walk  = mk(['walk0','walk1','walk2','walk3','walk4','walk5'], 10, true);
+      const jump  = mk(['jump0','jump1'], 10, false) || idle;
+      const atk   = mk(['attack0','attack1','attack2','attack3','attack4','attack5'], 12, false) || walk;
+      if(idle) player.add('idle', idle);
+      if(walk) player.add('walk', walk);
+      if(jump) player.add('jump', jump);
+      if(atk)  player.add('attack', atk);
+      player.play(player.has('idle')?'idle':'walk');
+    }
+    if(ninAtlas && ninMap){
+      const idx = buildFrameIndex(ninMap);
+      const mk = (names,fps,loop)=> new AtlasAnim(ninAtlas, idx, names.filter(n=>idx[n]), fps, loop);
+      const nIdle = mk(['black_idle_0'], 4, true);
+      const nWalk = mk(['black_walk1_1','black_walk2_2','black_walk1_6','black_walk2_7'], 8, true);
+      const nAtk  = mk(['black_attack1_3','black_attack2_4'], 10, true);
+      const e = new Actor();
+      if(nIdle) e.add('idle',nIdle);
+      if(nWalk) e.add('walk',nWalk);
+      if(nAtk)  e.add('attack',nAtk);
+      e.play(nIdle?'idle':'walk'); e.x=180; e.y=180; enemies.push(e);
+    }
+  }
+
+  /* ---------- animation/actor ---------- */
   class AtlasAnim {
     constructor(atlas, frameRects, order, fps=8, loop=true){
       this.atlas=atlas; this.frameRects=frameRects; this.order=order; this.fps=fps; this.loop=loop;
@@ -176,45 +273,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const player=new Actor(); const enemies=[];
-  function buildSprites(){
-    const usagiAtlas = images.get('assets/sprites/usagi.png');
-    const usagiMap   = jsons.get('assets/sprites/usagi_map.json');
-    const ninAtlas   = images.get('assets/sprites/ninjas.png');
-    const ninMap     = jsons.get('assets/sprites/ninjas_map.json');
-
-    const uiSummary = [];
-    if(usagiAtlas && usagiMap){
-      const idx = buildFrameIndex(usagiMap);
-      const mk = (names, fps, loop)=> new AtlasAnim(usagiAtlas, idx, names.filter(n=>idx[n]), fps, loop);
-      const idle  = mk(['idle0','idle1','idle2','idle1'], 6, true);
-      const walk  = mk(['walk0','walk1','walk2','walk3','walk4','walk5'], 10, true);
-      const jump  = mk(['jump0','jump1'], 10, false) || idle;
-      const atk   = mk(['attack0','attack1','attack2','attack3','attack4','attack5'], 12, false) || walk;
-      if(idle) player.add('idle', idle);
-      if(walk) player.add('walk', walk);
-      if(jump) player.add('jump', jump);
-      if(atk)  player.add('attack', atk);
-      player.play(player.has('idle')?'idle':'walk');
-      uiSummary.push('usagi:atlas');
-    } else uiSummary.push('usagi:missing');
-
-    if(ninAtlas && ninMap){
-      const idx = buildFrameIndex(ninMap);
-      const mk = (names,fps,loop)=> new AtlasAnim(ninAtlas, idx, names.filter(n=>idx[n]), fps, loop);
-      const nIdle = mk(['black_idle_0'], 4, true);
-      const nWalk = mk(['black_walk1_1','black_walk2_2','black_walk1_6','black_walk2_7'], 8, true);
-      const nAtk  = mk(['black_attack1_3','black_attack2_4'], 10, true);
-      const e = new Actor();
-      if(nIdle) e.add('idle',nIdle);
-      if(nWalk) e.add('walk',nWalk);
-      if(nAtk)  e.add('attack',nAtk);
-      e.play(nIdle?'idle':'walk'); e.x=180; e.y=180; enemies.push(e);
-      uiSummary.push('ninja:atlas');
-    } else uiSummary.push('ninja:missing');
-
-    log('Sprites:', uiSummary.join(' | '));
-  }
-
   /* ---------- game loop ---------- */
   let last=0, scroll=0;
   function update(dt){
@@ -242,7 +300,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function render(){
     ctx.clearRect(0,0,BASE_W,BASE_H);
 
-    // background (first one that loads)
     let bgImg=null;
     for(let i=1;i<=6;i++){ const p=`assets/background/background${i}.png`; if(images.get(p)){ bgImg=images.get(p); break; } }
     if(bgImg){
