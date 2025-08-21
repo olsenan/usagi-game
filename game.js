@@ -1,8 +1,8 @@
 /* =========================================================
-   Usagi Prototype – Pixel-Perfect + Mobile Clusters
-   - Integer scaling; smoothing disabled
-   - Touch controls grouped & auto-sized (no overlap)
-   - Same sprite fixes (no halo/bleed/jitter)
+   Usagi Prototype – Pixel-Perfect + Finalized Placeholder Art
+   - Uses new assets/ structure and 128x128 sprite frames
+   - Animation maps wired to atlas-like grid (no guesswork)
+   - Mobile buttons clustered & responsive (no overlap)
    ========================================================= */
 
 const BASE_W = 256, BASE_H = 224;
@@ -35,7 +35,7 @@ function resizeCanvas() {
   root.style.width  = canvas.style.width;
   root.style.height = canvas.style.height;
 
-  // ---- Responsive touch control sizing ----
+  // Touch control sizing
   const shortest = Math.min(w, h);
   const btn = Math.max(48, Math.min(96, Math.floor(shortest / 6))); // 48–96px
   const gap = Math.max(10, Math.floor(btn * 0.25));
@@ -49,22 +49,16 @@ const ipx = n => Math.round(n);
 
 // -------------------- Assets ---------------------------
 const ASSETS = {
-  backgrounds: [
-    'assets/background1.png',
-    'assets/background2.png',
-    'assets/background3.png',
-    'assets/background_stage1.png',
-    'assets/background_stage2.png',
-    'assets/background_stage3.png'
-  ],
-  usagiSheets: [
-    'assets/snes_usagi_sprite_sheet.png',       // 1024x1536 (64x64)
-    'assets/usagi_snes_sheet.png',              // 1024x1536 (64x64)
-    'assets/snes_usagi_sprite_sheet (1).png',   // 768x1152  (48x48)
-    'assets/usagi_debug_sheet.png',             // 768x1152  (48x48)
-    'assets/spritesheet.png'                    // 256x256   (32x32)
-  ],
-  enemySheet: 'assets/enemy_sprites.png'
+  backgroundFallback: null, // we draw a simple ground if no bg
+  usagi: 'assets/sprites/usagi.png',
+  ninjas: 'assets/sprites/ninjas.png',
+  tileset: 'assets/tiles/tileset.png',
+  ui: {
+    left:   'assets/ui/ui_left.png',
+    right:  'assets/ui/ui_right.png',
+    jump:   'assets/ui/ui_jump.png',
+    attack: 'assets/ui/ui_attack.png'
+  }
 };
 
 function loadImage(src) {
@@ -75,33 +69,6 @@ function loadImage(src) {
     img.onerror = () => reject(new Error('Failed to load: ' + src));
     img.src = src;
   });
-}
-async function loadFirstAvailableImage(list, report) {
-  let lastErr = null;
-  for (const src of list) {
-    try {
-      const img = await loadImage(src);
-      report?.push?.(`OK   ${src} (${img.width}x${img.height})`);
-      return img;
-    } catch (e) {
-      report?.push?.(`MISS ${src}`);
-      lastErr = e;
-    }
-  }
-  throw lastErr ?? new Error('No candidate image could be loaded.');
-}
-function detectGrid(img) {
-  const candidates = [64, 48, 32];
-  for (const fw of candidates) {
-    if (img.width % fw === 0 && img.height % fw === 0) {
-      return { frameW: fw, frameH: fw, columns: img.width / fw, rows: img.height / fw, spacing: 0, margin: 0 };
-    }
-  }
-  if (img.width % 16 === 0) {
-    const fw = img.width / 16;
-    if (img.height % fw === 0) return { frameW: fw, frameH: fw, columns: 16, rows: img.height / fw, spacing: 0, margin: 0 };
-  }
-  throw new Error(`Unable to detect grid for ${img.width}x${img.height}`);
 }
 
 // -------------------- Sprites --------------------------
@@ -155,7 +122,7 @@ class Sprite {
     else this.vx=0;
     if(input.jump && this.onGround){ this.vy=this.jumpV; this.onGround=false; }
     if(input.attack && (!this.current || this.current.done ||
-        this.current===this.anims.get('idle') || this.current===this.anims.get('run'))) {
+        this.current===this.anims.get('idle') || this.current===this.anims.get('run') || this.current===this.anims.get('walk'))) {
       this.play('attack', true);
     }
     this.x+=this.vx*dt; this.vy+=this.gravity*dt; this.y+=this.vy*dt;
@@ -163,7 +130,8 @@ class Sprite {
     const attacking=this.current===this.anims.get('attack') && !this.current.done;
     if(!attacking){
       if(!this.onGround) this.play('jump');
-      else if(this.vx!==0) this.play('run');
+      else if (Math.abs(this.vx) > this.speed*0.75) this.play('run');
+      else if (Math.abs(this.vx) > 0) this.play('walk');
       else this.play('idle');
     }
   }
@@ -221,13 +189,30 @@ const GAME = {
   enemy: null
 };
 
-/* Hard-wired animation map for 16 cols per row.
-   Adjust these indices to match your sheet if needed. */
-const ANIMS = {
-  idle:   { frames:[  0,  1,  2,  3],           fps:6,  loop:true  },
-  run:    { frames:[ 16, 17, 18, 19, 20, 21],   fps:10, loop:true  },
-  jump:   { frames:[ 32, 33, 34, 35],           fps:8,  loop:false },
-  attack: { frames:[ 48, 49, 50, 51],           fps:12, loop:false, holdLast:true }
+/* ======== NEW SPRITE SHEETS: fixed grids ========
+   usagi.png:  8 columns x 4 rows, frame 128x128
+   ninjas.png: 8 columns x 3 rows, frame 128x128
+   Animation frames below reference absolute indices.
+   Index = row*cols + col  (cols = 8)
+================================================== */
+const COLS = 8;
+
+// Usagi frame indices
+const U = {
+  idle:   [0,1,2],
+  walk:   [3,4,5,6,7, 8],         // row0 col3..7, row1 col0
+  run:    [9,10,11,12,13,14,15],  // row1 col1..7
+  attack: [16,17,18,19,20,21],    // row2 col0..5
+  jump:   [22,23],                 // row2 col6..7
+  hurt:   [24]                     // row3 col0
+};
+
+// Ninja simple demo indices (first row black)
+const N = {
+  idle:   [0],
+  walk:   [1,2,6,7], // just cycle for demo
+  attack: [3,4],
+  hurt:   [5]
 };
 
 let lastTime=0;
@@ -239,38 +224,42 @@ function loop(now){
 // -------------------- Boot ------------------------------
 async function boot(){
   try{
-    try{ GAME.bgImg = await loadFirstAvailableImage(ASSETS.backgrounds, GAME.report); }
-    catch{ GAME.report.push('No background loaded.'); GAME.bgImg=null; }
+    // Load sheets
+    const [uimg, nimg] = await Promise.all([
+      loadImage(ASSETS.usagi),
+      loadImage(ASSETS.ninjas)
+    ]);
+    GAME.report.push(`OK   ${ASSETS.usagi} (${uimg.width}x${uimg.height})`);
+    GAME.report.push(`OK   ${ASSETS.ninjas} (${nimg.width}x${nimg.height})`);
 
-    const uimg = await loadFirstAvailableImage(ASSETS.usagiSheets, GAME.report);
-    const grid = detectGrid(uimg);
-    const sheet = new SpriteSheet(uimg, grid.frameW, grid.frameH, grid.columns);
+    const usagiSheet = new SpriteSheet(uimg, 128,128, 8);
+    const ninjaSheet = new SpriteSheet(nimg, 128,128, 8);
 
-    const p = new Sprite(sheet);
-    p.addAnim('idle',   new Animation(ANIMS.idle.frames,   ANIMS.idle.fps,   ANIMS.idle.loop));
-    p.addAnim('run',    new Animation(ANIMS.run.frames,    ANIMS.run.fps,    ANIMS.run.loop));
-    p.addAnim('jump',   new Animation(ANIMS.jump.frames,   ANIMS.jump.fps,   ANIMS.jump.loop));
-    p.addAnim('attack', new Animation(ANIMS.attack.frames, ANIMS.attack.fps, ANIMS.attack.loop, ANIMS.attack.holdLast));
+    // Player
+    const p = new Sprite(usagiSheet);
+    p.addAnim('idle',   new Animation(U.idle,   6,  true));
+    p.addAnim('walk',   new Animation(U.walk,   8,  true));
+    p.addAnim('run',    new Animation(U.run,    12, true));
+    p.addAnim('attack', new Animation(U.attack, 12, false, true));
+    p.addAnim('jump',   new Animation(U.jump,   6,  false, true));
+    p.addAnim('hurt',   new Animation(U.hurt,   4,  false, true));
     p.play('idle', true);
     GAME.player = p;
 
-    // Optional enemy sanity-check
-    try{
-      const eimg = await loadImage(ASSETS.enemySheet);
-      GAME.report.push(`OK   ${ASSETS.enemySheet} (${eimg.width}x${eimg.height})`);
-      const egrid = detectGrid(eimg);
-      const es = new SpriteSheet(eimg, egrid.frameW, egrid.frameH, egrid.columns);
-      const e = new Sprite(es); e.x=200; e.y=180;
-      e.addAnim('idle', new Animation([0,1,2,3], 4, true));
-      e.play('idle', true);
-      GAME.enemy = e;
-    } catch { GAME.report.push(`MISS ${ASSETS.enemySheet}`); }
+    // Enemy (first row of ninjas)
+    const e = new Sprite(ninjaSheet);
+    e.x = 200; e.y = 180;
+    e.addAnim('idle',   new Animation(N.idle,   4, true));
+    e.addAnim('walk',   new Animation(N.walk,   6, true));
+    e.addAnim('attack', new Animation(N.attack, 8, false, true));
+    e.addAnim('hurt',   new Animation(N.hurt,   4, false, true));
+    e.play('idle', true);
+    GAME.enemy = e;
 
-    const hadMiss = GAME.report.some(r=>r.startsWith('MISS')||r.startsWith('Fatal'));
-    if(hadMiss){ reportLogEl.textContent = GAME.report.join('\n'); reportOverlay.classList.remove('hidden'); }
-
+    // Title
     GAME.state = 'title';
     titleOverlay.classList.remove('hidden');
+
   } catch (e) {
     GAME.report.push('Fatal load error: ' + e.message);
     reportLogEl.textContent = GAME.report.join('\n');
@@ -297,15 +286,9 @@ function update(dt){
 function render(){
   ctx.clearRect(0,0,BASE_W,BASE_H);
 
-  if(GAME.bgImg){
-    const tiles=Math.ceil(BASE_W/GAME.bgImg.width);
-    for(let i=0;i<tiles;i++){
-      ctx.drawImage(GAME.bgImg, i*GAME.bgImg.width, ipx(BASE_H - GAME.bgImg.height));
-    }
-  } else { ctx.fillStyle='#1b1f2a'; ctx.fillRect(0,0,BASE_W,BASE_H); }
-
-  ctx.fillStyle='#2e2e2e';
-  ctx.fillRect(0, ipx(182), BASE_W, BASE_H - 182);
+  // Simple background/ground
+  ctx.fillStyle='#1b1f2a'; ctx.fillRect(0,0,BASE_W,BASE_H);
+  ctx.fillStyle = '#2e2e2e'; ctx.fillRect(0, ipx(182), BASE_W, BASE_H - 182);
 
   if(GAME.player) GAME.player.draw(ctx);
   if(GAME.enemy)  GAME.enemy.draw(ctx);
