@@ -1,0 +1,8 @@
+{
+  "idle":    { "frameSize": [128, 128], "frames": 4, "path": "assets/sprites/usagi/idle.png" },
+  "walk":    { "frameSize": [128, 128], "frames": 6, "path": "assets/sprites/usagi/walk.png" },
+  "run":     { "frameSize": [128, 128], "frames": 6, "path": "assets/sprites/usagi/run.png" },
+  "attack1": { "frameSize": [128, 128], "frames": 4, "path": "assets/sprites/usagi/attack1.png" },
+  "attack2": { "frameSize": [128, 128], "frames": 6, "path": "assets/sprites/usagi/attack2.png" },
+  "jump":    { "frameSize": [128, 128], "frames": 4, "path": "assets/sprites/usagi/jump.png" }
+}
