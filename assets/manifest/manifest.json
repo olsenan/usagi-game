@@ -13,27 +13,6 @@
       "frameWidth": 64,
       "frameHeight": 64,
       "frameRate": 10
-    },
-    "attack": {
-      "src": "assets/sprites/usagi/attack.png",
-      "frames": 6,
-      "frameWidth": 64,
-      "frameHeight": 64,
-      "frameRate": 12
-    },
-    "jump": {
-      "src": "assets/sprites/usagi/jump.png",
-      "frames": 4,
-      "frameWidth": 64,
-      "frameHeight": 64,
-      "frameRate": 8
-    },
-    "death": {
-      "src": "assets/sprites/usagi/death.png",
-      "frames": 6,
-      "frameWidth": 64,
-      "frameHeight": 64,
-      "frameRate": 6
     }
   },
   "ninja": {
@@ -43,34 +22,6 @@
       "frameWidth": 64,
       "frameHeight": 64,
       "frameRate": 6
-    },
-    "walk": {
-      "src": "assets/sprites/ninja/walk.png",
-      "frames": 6,
-      "frameWidth": 64,
-      "frameHeight": 64,
-      "frameRate": 10
-    },
-    "attack": {
-      "src": "assets/sprites/ninja/attack.png",
-      "frames": 6,
-      "frameWidth": 64,
-      "frameHeight": 64,
-      "frameRate": 12
-    },
-    "jump": {
-      "src": "assets/sprites/ninja/jump.png",
-      "frames": 4,
-      "frameWidth": 64,
-      "frameHeight": 64,
-      "frameRate": 8
-    },
-    "death": {
-      "src": "assets/sprites/ninja/death.png",
-      "frames": 6,
-      "frameWidth": 64,
-      "frameHeight": 64,
-      "frameRate": 6
     }
   }
-    }
+}
