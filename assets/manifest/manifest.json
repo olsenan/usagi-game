@@ -1,14 +1,22 @@
 {
   "usagi": {
     "idle": {
-      "src": "assets/sprites/usagi/idle.png",
+      "src": [
+        "assets/sprites/usagi/idle.png",
+        "assets/sprites/usagi_idle.png",
+        "assets/sprites/idle_usagi.png"
+      ],
       "frames": 4,
       "frameWidth": 64,
       "frameHeight": 64,
       "frameRate": 6
     },
     "walk": {
-      "src": "assets/sprites/usagi/walk.png",
+      "src": [
+        "assets/sprites/usagi/walk.png",
+        "assets/sprites/usagi_walk.png",
+        "assets/sprites/walk_usagi.png"
+      ],
       "frames": 6,
       "frameWidth": 64,
       "frameHeight": 64,
@@ -17,7 +25,11 @@
   },
   "ninja": {
     "idle": {
-      "src": "assets/sprites/ninja/idle.png",
+      "src": [
+        "assets/sprites/ninja/idle.png",
+        "assets/sprites/ninja_idle.png",
+        "assets/sprites/idle_ninja.png"
+      ],
       "frames": 4,
       "frameWidth": 64,
       "frameHeight": 64,
