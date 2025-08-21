@@ -2,47 +2,50 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Usagi Yojimbo – Prototype</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <link rel="stylesheet" href="./style.css?v=11" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Usagi Prototype</title>
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
   <div id="root">
     <canvas id="game" width="256" height="224" aria-label="Game canvas"></canvas>
 
-    <!-- Title -->
-    <section id="ui-title" class="overlay visible" aria-label="Title Screen">
+    <!-- Title screen -->
+    <div class="overlay visible" id="ui-title">
       <div class="title-bg"></div>
       <div class="panel">
-        <h1 class="logo"><span>USAGI</span><em>YOJIMBO</em></h1>
-        <button id="btn-start" class="btn">Start</button>
-        <p class="hint">Press <kbd>Enter</kbd> or tap anywhere</p>
+        <h1 class="logo">
+          <span>USAGI</span>
+          <em>YOJIMBO</em>
+        </h1>
+        <button class="btn" id="btn-start">Start</button>
+        <p class="hint small" style="margin-top:10px">Press <kbd>Enter</kbd> or tap anywhere</p>
+        <p class="small" id="build-tag">Build v7</p>
       </div>
-    </section>
+    </div>
 
-    <!-- Loading -->
-    <section id="ui-loading" class="overlay" aria-label="Loading Screen">
+    <!-- Loading screen -->
+    <div class="overlay" id="ui-loading" aria-hidden="true">
       <div class="panel">
         <h2 class="heading">Loading…</h2>
         <div class="bar"><div id="bar-fill"></div></div>
-        <p id="load-text" class="hint">0 / 0</p>
-        <p class="hint small">Missing assets won’t block launch</p>
+        <p class="small" id="load-text">Loaded images: 0 / 0</p>
+        <p class="small" id="build-tag2">Build v7</p>
       </div>
-    </section>
-
-    <!-- Touch controls (shown in Play) -->
-    <div id="touch" class="touch hidden" aria-hidden="true">
-      <button id="left"   class="tc tc-left"  aria-label="Left"></button>
-      <button id="right"  class="tc tc-right" aria-label="Right"></button>
-      <button id="jump"   class="tc tc-jump"  aria-label="Jump"></button>
-      <button id="attack" class="tc tc-attack" aria-label="Attack"></button>
     </div>
 
-    <!-- HUD / debug -->
-    <pre id="hud" class="hud"></pre>
+    <!-- Touch controls -->
+    <div class="touch hidden" id="touch" aria-hidden="true">
+      <div class="tc tc-left"   id="left"   title="Left"></div>
+      <div class="tc tc-right"  id="right"  title="Right"></div>
+      <div class="tc tc-jump"   id="jump"   title="Jump"></div>
+      <div class="tc tc-attack" id="attack" title="Attack"></div>
+    </div>
+
+    <!-- Debug HUD -->
+    <pre class="hud" id="hud">Build v7</pre>
   </div>
 
-  <script defer src="./game.js?v=11"></script>
-  <noscript>This game requires JavaScript.</noscript>
+  <script src="game.js?v=7"></script>
 </body>
 </html>
