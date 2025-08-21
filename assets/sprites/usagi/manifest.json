@@ -1,0 +1,10 @@
+{
+  "idle": {
+    "frameSize": [
+      128,
+      1024
+    ],
+    "frames": 12,
+    "path": "assets/sprites/ninja/idle.png"
+  }
+}
