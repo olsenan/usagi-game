@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <title>Usagi Yojimbo – Prototype</title>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <link rel="stylesheet" href="./style.css?v=10" />
+  <link rel="stylesheet" href="./style.css?v=11" />
 </head>
 <body>
   <div id="root">
@@ -26,11 +26,11 @@
         <h2 class="heading">Loading…</h2>
         <div class="bar"><div id="bar-fill"></div></div>
         <p id="load-text" class="hint">0 / 0</p>
-        <p class="hint small">Tip: missing assets won’t block launch</p>
+        <p class="hint small">Missing assets won’t block launch</p>
       </div>
     </section>
 
-    <!-- Touch controls -->
+    <!-- Touch controls (shown in Play) -->
     <div id="touch" class="touch hidden" aria-hidden="true">
       <button id="left"   class="tc tc-left"  aria-label="Left"></button>
       <button id="right"  class="tc tc-right" aria-label="Right"></button>
@@ -38,11 +38,11 @@
       <button id="attack" class="tc tc-attack" aria-label="Attack"></button>
     </div>
 
-    <!-- Debug HUD -->
+    <!-- HUD / debug -->
     <pre id="hud" class="hud"></pre>
   </div>
 
-  <script defer src="./game.js?v=10"></script>
+  <script defer src="./game.js?v=11"></script>
   <noscript>This game requires JavaScript.</noscript>
 </body>
 </html>
