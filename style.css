@@ -3,6 +3,7 @@
 html,body{margin:0;height:100%;background:#0b0b0b;color:#fff;font-family:system-ui,Segoe UI,Roboto,Arial;touch-action:none}
 #root{position:relative;display:flex;justify-content:center;align-items:center;padding:16px;height:100%}
 canvas{image-rendering:pixelated;image-rendering:crisp-edges;background:#000;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+
 .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:auto;z-index:50}
 .overlay.visible{display:flex}
 .title-bg{position:absolute;inset:0;background:#133a5a url(assets/title/title_bg.png) center/cover no-repeat;filter:saturate(105%)}
@@ -14,10 +15,13 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;background:#000;bor
 .btn:active{transform:translateY(1px);box-shadow:0 3px 10px rgba(240,138,0,.3)}
 .hint{opacity:.9}
 .small{opacity:.7;font-size:.9rem}
+
 .heading{margin:0 0 10px}
 .bar{width:min(84vw,440px);height:14px;border-radius:9px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);margin:6px auto 10px;overflow:hidden}
 #bar-fill{height:100%;width:0%;background:#4c7cf4}
 kbd{background:#222;border:1px solid #444;border-bottom-color:#111;padding:2px 6px;border-radius:4px}
+
+/* Touch */
 .touch{position:absolute;inset:0;pointer-events:none;z-index:40}
 .tc{position:absolute;width:var(--btn);height:var(--btn);border-radius:18px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(6px);pointer-events:auto}
 .tc-left{left:var(--gap);bottom:var(--gap)}
