@@ -1,9 +1,7 @@
 /* =========================================================
-   Usagi Prototype – Mobile-friendly Start + Touch Controls
-   - Pixel-perfect sprite rendering (no halos/jitter)
-   - Integer canvas scaling; smoothing disabled
-   - Start screen that accepts tap ANYWHERE or Start button
-   - Report overlay only appears on real errors
+   Usagi Prototype – Pixel Perfect + Mobile + Fixed Anim Map
+   Canonical sheet: assets/snes_usagi_sprite_sheet.png
+   Frame size: 64x64, Grid: 16 columns (auto-detect still works)
    ========================================================= */
 
 const BASE_W = 256, BASE_H = 224;
@@ -51,6 +49,7 @@ const ASSETS = {
     'assets/background_stage2.png',
     'assets/background_stage3.png'
   ],
+  // Put our preferred sheet FIRST so we use it when available
   usagiSheets: [
     'assets/snes_usagi_sprite_sheet.png',       // 1024x1536 (64x64)
     'assets/usagi_snes_sheet.png',              // 1024x1536 (64x64)
@@ -75,10 +74,10 @@ async function loadFirstAvailableImage(list, report) {
   for (const src of list) {
     try {
       const img = await loadImage(src);
-      report.push(`OK   ${src} (${img.width}x${img.height})`);
+      report?.push?.(`OK   ${src} (${img.width}x${img.height})`);
       return img;
     } catch (e) {
-      report.push(`MISS ${src}`);
+      report?.push?.(`MISS ${src}`);
       lastErr = e;
     }
   }
@@ -103,7 +102,7 @@ class SpriteSheet {
   constructor(img, fw, fh, cols, margin=0, spacing=0) {
     this.img = img; this.fw = fw; this.fh = fh; this.cols = cols;
     this.margin = margin; this.spacing = spacing;
-    this.safeInset = 0.01; // bleed guard
+    this.safeInset = 0.01; // guard against neighbor bleed
   }
   srcRect(i) {
     const col = i % this.cols, row = Math.floor(i / this.cols);
@@ -115,22 +114,22 @@ class SpriteSheet {
 }
 class Animation {
   constructor(frames, fps=8, loop=true, holdLast=false) {
-    this.frames = frames; this.fps=fps; this.loop=loop; this.holdLast=holdLast;
+    this.frames=frames; this.fps=fps; this.loop=loop; this.holdLast=holdLast;
     this.t=0; this.i=0; this.done=false;
   }
   update(dt){
     if(this.done) return;
-    this.t += dt;
-    const adv = Math.floor(this.t*this.fps);
+    this.t+=dt;
+    const adv=Math.floor(this.t*this.fps);
     if(adv>0){
-      this.t -= adv/this.fps; this.i += adv;
-      if(this.i >= this.frames.length){
-        if(this.loop) this.i %= this.frames.length;
+      this.t-=adv/this.fps; this.i+=adv;
+      if(this.i>=this.frames.length){
+        if(this.loop) this.i%=this.frames.length;
         else { this.i=this.frames.length-1; this.done=true; }
       }
     }
   }
-  currentFrame(){ return this.frames[Math.min(this.i, this.frames.length-1)]; }
+  currentFrame(){ return this.frames[Math.min(this.i,this.frames.length-1)]; }
   reset(){ this.t=0; this.i=0; this.done=false; }
 }
 class Sprite {
@@ -144,17 +143,17 @@ class Sprite {
   play(n, restart=false){ const a=this.anims.get(n); if(!a) return; if(this.current!==a||restart) a.reset(); this.current=a; }
   update(dt,input){
     if(this.current) this.current.update(dt);
-    if(input.left) { this.vx=-this.speed; this.flipX=true; }
+    if(input.left){ this.vx=-this.speed; this.flipX=true; }
     else if(input.right){ this.vx=this.speed; this.flipX=false; }
     else this.vx=0;
     if(input.jump && this.onGround){ this.vy=this.jumpV; this.onGround=false; }
     if(input.attack && (!this.current || this.current.done ||
-      this.current===this.anims.get('idle') || this.current===this.anims.get('run'))) {
+        this.current===this.anims.get('idle') || this.current===this.anims.get('run'))) {
       this.play('attack', true);
     }
     this.x+=this.vx*dt; this.vy+=this.gravity*dt; this.y+=this.vy*dt;
     if(this.y>=180){ this.y=180; this.vy=0; this.onGround=true; }
-    const attacking = this.current===this.anims.get('attack') && !this.current.done;
+    const attacking=this.current===this.anims.get('attack') && !this.current.done;
     if(!attacking){
       if(!this.onGround) this.play('jump');
       else if(this.vx!==0) this.play('run');
@@ -174,7 +173,6 @@ class Sprite {
 
 // -------------------------------- Input -----------------
 const input = { left:false, right:false, jump:false, attack:false, debug:false };
-
 function handleKey(e, down){
   const k=e.code;
   if(k==='ArrowLeft'||k==='KeyA'){ input.left=down; e.preventDefault(); }
@@ -187,12 +185,12 @@ function handleKey(e, down){
 addEventListener('keydown', e=>handleKey(e,true), {passive:false});
 addEventListener('keyup',   e=>handleKey(e,false),{passive:false});
 
-// Tap ANYWHERE (root or overlay) to start
+// Tap anywhere to start
 ['pointerdown','touchstart'].forEach(ev=>{
   root.addEventListener(ev, ()=>{ if(GAME.state==='title') startGame(); }, {passive:true});
 });
 
-// Touch buttons (hold-to-press)
+// Touch buttons
 function bindHold(id, setFlag){
   const el=document.getElementById(id); if(!el) return;
   const on = e=>{ e.preventDefault(); setFlag(true); };
@@ -209,18 +207,26 @@ bindHold('btn-attack',v=>input.attack=v);
 
 // -------------------------------- Game State ------------
 const GAME = {
-  state: 'boot', // 'boot' | 'title' | 'play'
+  state: 'boot',
   report: [],
   bgImg: null,
   player: null,
   enemy: null
 };
 
+/* ======== HARD-WIRED ANIMATION MAP (16 columns per row) ========
+   Assumed layout on snes_usagi_sprite_sheet.png:
+   Row 0: idle  (frames 0..3)
+   Row 1: run   (frames 16..21)
+   Row 2: jump  (frames 32..35)
+   Row 3: attack(frames 48..51)
+   If your sheet differs, just change arrays below.
+================================================================= */
 const ANIMS = {
-  idle:   { frames:[0,1,2,3], fps:6,  loop:true },
-  run:    { frames:[8,9,10,11,12,13], fps:10, loop:true },
-  jump:   { frames:[16,17,18,19], fps:8,  loop:false },
-  attack: { frames:[24,25,26,27], fps:12, loop:false, holdLast:true }
+  idle:   { frames:[  0,  1,  2,  3],           fps:6,  loop:true  },
+  run:    { frames:[ 16, 17, 18, 19, 20, 21],   fps:10, loop:true  },
+  jump:   { frames:[ 32, 33, 34, 35],           fps:8,  loop:false },
+  attack: { frames:[ 48, 49, 50, 51],           fps:12, loop:false, holdLast:true }
 };
 
 let lastTime=0;
@@ -236,10 +242,10 @@ async function boot(){
     catch{ GAME.report.push('No background loaded.'); GAME.bgImg=null; }
 
     const uimg = await loadFirstAvailableImage(ASSETS.usagiSheets, GAME.report);
-    const ugrid = detectGrid(uimg);
-    const usagiSheet = new SpriteSheet(uimg, ugrid.frameW, ugrid.frameH, ugrid.columns);
+    const grid = detectGrid(uimg);
+    const sheet = new SpriteSheet(uimg, grid.frameW, grid.frameH, grid.columns);
 
-    const p = new Sprite(usagiSheet);
+    const p = new Sprite(sheet);
     p.addAnim('idle',   new Animation(ANIMS.idle.frames,   ANIMS.idle.fps,   ANIMS.idle.loop));
     p.addAnim('run',    new Animation(ANIMS.run.frames,    ANIMS.run.fps,    ANIMS.run.loop));
     p.addAnim('jump',   new Animation(ANIMS.jump.frames,   ANIMS.jump.fps,   ANIMS.jump.loop));
@@ -247,7 +253,7 @@ async function boot(){
     p.play('idle', true);
     GAME.player = p;
 
-    // Enemy (optional) — register anim BEFORE play
+    // Optional enemy check
     try{
       const eimg = await loadImage(ASSETS.enemySheet);
       GAME.report.push(`OK   ${ASSETS.enemySheet} (${eimg.width}x${eimg.height})`);
@@ -259,15 +265,8 @@ async function boot(){
       GAME.enemy = e;
     } catch { GAME.report.push(`MISS ${ASSETS.enemySheet}`); }
 
-    // Only show report overlay if there were any MISS entries
-    const hadMiss = GAME.report.some(r=>r.startsWith('MISS') || r.startsWith('Fatal'));
-    if (hadMiss) {
-      reportLogEl.textContent = GAME.report.join('\n');
-      reportOverlay.classList.remove('hidden');
-    } else {
-      reportOverlay.classList.add('hidden');
-    }
-
+    const hadMiss = GAME.report.some(r=>r.startsWith('MISS')||r.startsWith('Fatal'));
+    if(hadMiss){ reportLogEl.textContent = GAME.report.join('\n'); reportOverlay.classList.remove('hidden'); }
     GAME.state = 'title';
     titleOverlay.classList.remove('hidden');
   } catch (e) {
@@ -301,9 +300,7 @@ function render(){
     for(let i=0;i<tiles;i++){
       ctx.drawImage(GAME.bgImg, i*GAME.bgImg.width, ipx(BASE_H - GAME.bgImg.height));
     }
-  } else {
-    ctx.fillStyle='#1b1f2a'; ctx.fillRect(0,0,BASE_W,BASE_H);
-  }
+  } else { ctx.fillStyle='#1b1f2a'; ctx.fillRect(0,0,BASE_W,BASE_H); }
 
   ctx.fillStyle='#2e2e2e';
   ctx.fillRect(0, ipx(182), BASE_W, BASE_H - 182);
