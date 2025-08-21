@@ -1,48 +1,43 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Usagi Yojimbo – Prototype</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#000000" />
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <div id="game-root">
-      <canvas id="game" width="256" height="224" aria-label="Game canvas"></canvas>
+<head>
+  <meta charset="utf-8" />
+  <title>Usagi Prototype</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="game-root" class="root">
+    <canvas id="game" width="256" height="224"></canvas>
 
-      <!-- Title / Start overlay -->
-      <div id="title-overlay" class="overlay">
-        <div class="panel">
-          <h1>Usagi Prototype</h1>
-          <p>Side-scrolling SNES-style demo</p>
-          <button id="start-btn" class="start-btn">Start</button>
-          <p class="sub">Press <b>Enter</b> or tap anywhere</p>
-        </div>
-      </div>
-
-      <!-- Error/report overlay (only shown if there’s an error) -->
-      <div id="report-overlay" class="overlay hidden">
-        <div class="panel">
-          <h2>Asset Load Report</h2>
-          <pre id="report-log"></pre>
-          <button id="report-close">Close</button>
-        </div>
-      </div>
-
-      <!-- Mobile controls (shown only during play) -->
-      <div id="touch-controls" class="hidden" aria-hidden="true">
-        <div class="cluster left">
-          <button class="btn" id="btn-left"   title="Left"></button>
-          <button class="btn" id="btn-right"  title="Right"></button>
-        </div>
-        <div class="cluster right">
-          <button class="btn" id="btn-jump"   title="Jump"></button>
-          <button class="btn" id="btn-attack" title="Attack"></button>
-        </div>
+    <!-- Title / Start overlay -->
+    <div id="title-overlay" class="overlay visible" role="dialog" aria-label="Title Screen">
+      <div class="panel">
+        <h1 class="title">Usagi Prototype</h1>
+        <p class="subtitle">Side-scrolling SNES-style demo</p>
+        <button id="start-btn" type="button" class="btn">Start</button>
+        <p class="hint">Tip: press <kbd>Enter</kbd> on desktop, or tap anywhere to start</p>
       </div>
     </div>
 
-    <script type="module" src="./game.js"></script>
-  </body>
+    <!-- Load report (debug) -->
+    <div id="report-overlay" class="overlay hidden" role="dialog" aria-label="Asset Load Report">
+      <div class="panel">
+        <h2>Asset Load Report</h2>
+        <pre id="report-log"></pre>
+        <button id="report-close" type="button" class="btn">Close</button>
+      </div>
+    </div>
+
+    <!-- Touch controls -->
+    <div id="touch-controls" class="touch hidden" aria-hidden="true">
+      <button id="btn-left" class="tc tc-left"  aria-label="Left"></button>
+      <button id="btn-right" class="tc tc-right" aria-label="Right"></button>
+      <button id="btn-jump" class="tc tc-jump"  aria-label="Jump"></button>
+      <button id="btn-attack" class="tc tc-attack" aria-label="Attack"></button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
 </html>
