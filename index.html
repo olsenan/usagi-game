@@ -32,10 +32,14 @@
 
       <!-- Mobile controls (shown only during play) -->
       <div id="touch-controls" class="hidden" aria-hidden="true">
-        <button class="btn dpad left"  id="btn-left"  title="Left"></button>
-        <button class="btn dpad right" id="btn-right" title="Right"></button>
-        <button class="btn act jump"    id="btn-jump"  title="Jump"></button>
-        <button class="btn act attack"  id="btn-attack" title="Attack"></button>
+        <div class="cluster left">
+          <button class="btn" id="btn-left"   title="Left"></button>
+          <button class="btn" id="btn-right"  title="Right"></button>
+        </div>
+        <div class="cluster right">
+          <button class="btn" id="btn-jump"   title="Jump"></button>
+          <button class="btn" id="btn-attack" title="Attack"></button>
+        </div>
       </div>
     </div>
 
