@@ -1,0 +1,10 @@
+{
+  "run": {
+    "frameSize": [
+      128,
+      1024
+    ],
+    "frames": 8,
+    "path": "assets/sprites/usagi/run.png"
+  }
+}
