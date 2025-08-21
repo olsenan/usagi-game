@@ -4,8 +4,7 @@
   <meta charset="utf-8" />
   <title>Usagi Prototype</title>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <!-- Use singular file name -->
-  <link rel="stylesheet" href="./style.css?v=6" />
+  <link rel="stylesheet" href="./style.css?v=7" />
 </head>
 <body>
   <div id="game-root" class="root">
@@ -14,25 +13,4 @@
     <!-- Title / Start overlay -->
     <div id="title-overlay" class="overlay visible" role="dialog" aria-label="Title Screen">
       <div class="panel">
-        <h1 class="title">Usagi Prototype</h1>
-        <p class="subtitle">Side-scrolling SNES-style demo</p>
-        <button id="start-btn" type="button" class="btn">Start</button>
-        <p class="hint">Tip: press <kbd>Enter</kbd> on desktop, or tap anywhere to start</p>
-        <div id="load-report" class="mini-report"></div>
-      </div>
-    </div>
-
-    <!-- Touch controls (hidden until game starts) -->
-    <div id="touch-controls" class="touch hidden" aria-hidden="true">
-      <button id="btn-left"   class="tc tc-left"  aria-label="Left"></button>
-      <button id="btn-right"  class="tc tc-right" aria-label="Right"></button>
-      <button id="btn-jump"   class="tc tc-jump"  aria-label="Jump"></button>
-      <button id="btn-attack" class="tc tc-attack" aria-label="Attack"></button>
-    </div>
-  </div>
-
-  <!-- Defer so DOM exists before JS runs. Version bump busts cache on GH Pages -->
-  <script defer src="./game.js?v=6"></script>
-  <noscript>This game requires JavaScript to run.</noscript>
-</body>
-</html>
+        <h1 class="title">Usagi
