@@ -7,7 +7,7 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;background:#000;bor
 
 .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:auto;z-index:50}
 .overlay.visible{display:flex}
-.title-bg{position:absolute;inset:0;background:#133a5a url(assets/title/title_bg.png) center/cover no-repeat;filter:saturate(105%)}
+.title-bg{position:absolute;inset:0;background:#133a5a url(assets/title/title_bg_new.png) center/cover no-repeat;filter:saturate(105%)}
 .panel{position:relative;z-index:1;width:min(92vw,520px);background:rgba(20,22,26,.9);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:24px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.55)}
 .logo{margin:0 0 10px;font-weight:900;line-height:.9;letter-spacing:.5px}
 .logo span{display:block;font-size:clamp(42px,12vw,110px);color:#f3e4b5;text-shadow:0 2px 0 #1c1400,0 6px 16px rgba(0,0,0,.45)}
