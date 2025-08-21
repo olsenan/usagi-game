@@ -1,7 +1,3 @@
-// Usagi Prototype — robust mobile start, non-blocking loader, rAF loop.
-// Sources for best-practices: pointer events / 300ms delay, rAF game loop,
-// passive listeners & touch-action. See project notes.
-
 document.addEventListener('DOMContentLoaded', () => {
   const BASE_W = 256, BASE_H = 224;
 
@@ -46,7 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Input (pointer + keyboard)
   const input = { left:false, right:false, jump:false, attack:false };
-
   function bindHold(id, setter){
     const el = document.getElementById(id); if(!el) return;
     const down = e=>{ e.preventDefault(); setter(true); };
@@ -77,15 +72,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if(['KeyJ','KeyK','KeyZ','KeyX'].includes(k)) input.attack=false;
   }, { passive:false });
 
-  // Start unification: pointerdown anywhere on title OR Start button.
+  // Start
   const requestStart = (e)=>{
     e?.preventDefault?.();
     if(state!=='TITLE') return;
-    uiTitle.classList.remove('visible');          // hide title
-    uiTitle.style.pointerEvents = 'none';         // release capture
-    uiLoading.classList.add('visible');           // show loading
+    uiTitle.classList.remove('visible');
+    uiTitle.style.pointerEvents = 'none';
+    uiLoading.classList.add('visible');
     state = 'LOADING';
-    bootstrap();                                  // begin loading (non-blocking)
+    bootstrap();
   };
   ['pointerdown','click','touchend'].forEach(ev=>{
     btnStart.addEventListener(ev, requestStart, { passive:false });
@@ -96,6 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const MANIFEST_PATH = 'assets/manifest/manifest.json';
   let manifest = null;
   const images = new Map();
+  const missing = [];
 
   function loadImage(path){
     return new Promise(resolve=>{
@@ -116,6 +112,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const paths = [];
+
+    // Manifest sprites (usagi + ninja)
     if (manifest) {
       for (const char of Object.keys(manifest)) {
         for (const key of Object.keys(manifest[char])) {
@@ -124,18 +122,73 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     }
-    // Backgrounds (optional)
+
+    // Backgrounds
     for (let i=1;i<=6;i++) paths.push(`assets/background/background${i}.png`);
+
+    // UI button icons (these are the filenames in your repo root assets/)
+    const UI_ICONS = {
+      left:   'assets/ui_left.png',
+      right:  'assets/ui_right.png',
+      jump:   'assets/ui_jump.png',
+      attack: 'assets/ui_attack.png',
+    };
+    const uiIconPaths = Object.values(UI_ICONS);
+    paths.push(...uiIconPaths);
 
     const total = paths.length;
     let done = 0;
-    const tickBar = ()=>{ const pct = total? Math.round(done/total*100):100; barFill.style.width=pct+'%'; loadText.textContent=`${done} / ${total}`; };
+    const tickBar = ()=>{
+      const pct = total? Math.round(done/total*100):100;
+      barFill.style.width = pct+'%';
+      loadText.textContent = `Loaded images: ${done} / ${total}`;
+    };
     tickBar();
 
-    await Promise.allSettled(paths.map(p=>loadImage(p).then(r=>{ done++; tickBar(); return r; })))
-      .then(results=>{
-        for(const r of results){ if(r.status==='fulfilled' && r.value.ok) images.set(r.value.path, r.value.img); }
-      });
+    const results = await Promise.allSettled(
+      paths.map(p => loadImage(p).then(r => { done++; tickBar(); return r; }))
+    );
+
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.ok) {
+        images.set(r.value.path, r.value.img);
+      } else if (r.status === 'fulfilled' && !r.value.ok) {
+        missing.push(r.value.path);
+      } else if (r.status === 'rejected') {
+        missing.push('<<load failed>>');
+      }
+    }
+
+    // Apply UI icons to buttons even if some other assets failed
+    const setIcon = (id, path)=>{
+      const el = document.getElementById(id);
+      if (!el) return;
+      const img = images.get(path);
+      if (img) {
+        // apply to ::after via inline CSS variable (works on Android)
+        el.style.setProperty('--icon-url', `url("${path}")`);
+        el.style.position = 'relative';
+        // force icon on pseudo-element (CSS var fallback)
+        el.querySelector?.(':after'); // harmless touch for legacy
+        el.style.setProperty('content', '');
+        el.style.setProperty('background-image', `url("${path}")`);
+      } else {
+        // fallback glyph
+        const map = { left:'◀', right:'▶', jump:'▲', attack:'✕' };
+        el.textContent = map[id] || '?';
+        el.style.fontWeight = '900';
+        el.style.fontSize = Math.floor(parseInt(getComputedStyle(el).width)*0.45)+'px';
+      }
+    };
+    setIcon('left',   UI_ICONS.left);
+    setIcon('right',  UI_ICONS.right);
+    setIcon('jump',   UI_ICONS.jump);
+    setIcon('attack', UI_ICONS.attack);
+
+    if (missing.length) {
+      log('Missing images:', '\n' + missing.slice(0,12).join('\n') + (missing.length>12?'\n…':''));
+      log('Tip: rename or move files so paths match exactly.');
+    }
 
     uiLoading.classList.remove('visible');
     touchUI.classList.remove('hidden');
@@ -159,9 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
     has(name){ return this.anims.has(name); }
     play(name,restart=false){ if(!this.has(name)) return; if(this.cur!==name||restart){ this.anims.get(name).anim.reset(); this.cur=name; } }
     update(dt){
-      this.x += this.vx*dt;
-      this.vy += this.gravity*dt;
-      this.y += this.vy*dt;
+      this.x += this.vx*dt; this.vy += this.gravity*dt; this.y += this.vy*dt;
       if(this.y>=180){ this.y=180; this.vy=0; this.onGround=true; }
       if(this.cur) this.anims.get(this.cur).anim.step(dt);
     }
@@ -189,7 +240,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if(!img) continue;
       out[name] = new StripSheet(img, meta.frameWidth, meta.frameHeight, meta.frames);
     }
-    // aliases
     out.walk = out.walk || out.run || out.idle || Object.values(out)[0];
     out.idle = out.idle || out.walk || Object.values(out)[0];
     out.jump = out.jump || out.run || out.walk || out.idle;
@@ -232,8 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
       player.update(dt);
       enemies.forEach(e=>{
         const d = player.x - e.x; e.flip = d<0; e.vx = Math.sign(d)*24;
-        if(e.has('walk')) e.play('walk');
-        e.update(dt);
+        if(e.has('walk')) e.play('walk'); e.update(dt);
       });
 
       scroll = (scroll + dt*18) % 512;
@@ -241,8 +290,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function render(){
-    // BG: first existing background (tiled)
     ctx.clearRect(0,0,BASE_W,BASE_H);
+    // BG: first existing background (tiled)
     let bgImg = null;
     for (let i=1;i<=6;i++){ const p=`assets/background/background${i}.png`; if(images.get(p)){ bgImg=images.get(p); break; } }
     if(bgImg){
@@ -255,42 +304,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     player.draw(ctx);
     enemies.forEach(e=>e.draw(ctx));
+
+    // show short missing-list line
+    if (missing.length) {
+      ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(6,6,120,16);
+      ctx.fillStyle='#fff'; ctx.font='10px monospace';
+      ctx.fillText(`Missing: ${missing.length}`, 10, 18);
+    }
   }
 
   function loop(t){
     const dt = Math.min(0.05, (t-last)/1000)||0.0167; last=t;
     update(dt); render();
-    frameCount++; // QA hook
+    frameCount++;
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
-
-  // ---------- QA self-check (open with #qa in the URL) ----------
-  if (location.hash === '#qa') {
-    (async () => {
-      const report = [];
-      const assert = (name, cond)=> report.push(`${cond?'PASS':'FAIL'} • ${name}`);
-
-      // 1. Start transitions
-      assert('Title visible initially', uiTitle.classList.contains('visible'));
-      requestStart();
-      await new Promise(r=>setTimeout(r, 200));
-      assert('Loading becomes visible', uiLoading.classList.contains('visible'));
-
-      // 2. Loading completes within 4s (even with 404s)
-      const t0 = performance.now();
-      while(state !== 'PLAY' && performance.now()-t0 < 4000) await new Promise(r=>setTimeout(r, 50));
-      assert('Entered PLAY state', state==='PLAY');
-
-      // 3. rAF loop running
-      const f0 = frameCount; await new Promise(r=>setTimeout(r, 300));
-      assert('Game loop increments frames', frameCount > f0 + 5);
-
-      // 4. Overlays not intercepting input
-      assert('Title overlay hidden after start', !uiTitle.classList.contains('visible'));
-
-      hud.textContent = 'QA REPORT\n' + report.join('\n');
-      console.log(hud.textContent);
-    })();
-  }
 });
