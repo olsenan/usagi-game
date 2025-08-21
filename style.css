@@ -1,29 +1,23 @@
 /* Pixel-art friendly defaults */
-:root {
-  color-scheme: dark;
-}
+:root { color-scheme: dark; }
 
-html, body {
-  height: 100%;
-}
+html, body { height: 100%; }
 
 body {
   margin: 0;
   background: #0b0b0b;
   display: grid;
   place-items: center;
-  touch-action: none; /* prevent touch scrolling on mobile */
+  touch-action: none;
   user-select: none;
 }
 
 canvas {
-  /* Force nearest-neighbor everywhere */
-  image-rendering: optimizeSpeed;             /* older browsers */
-  image-rendering: -moz-crisp-edges;          /* Firefox */
-  image-rendering: pixelated;                 /* Chrome/Edge */
-  image-rendering: crisp-edges;               /* Safari (fallback) */
-  -ms-interpolation-mode: nearest-neighbor;   /* old IE */
-  /* Prevent sub-pixel layout scaling artifacts */
+  image-rendering: optimizeSpeed;      /* older browsers */
+  image-rendering: -moz-crisp-edges;   /* Firefox */
+  image-rendering: pixelated;          /* Chrome/Edge */
+  image-rendering: crisp-edges;        /* Safari (fallback) */
+  -ms-interpolation-mode: nearest-neighbor;
   transform: translateZ(0);
   box-shadow: 0 0.5rem 2rem rgba(0,0,0,0.6);
   background: #000;
