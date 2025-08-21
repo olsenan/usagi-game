@@ -2,26 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Usagi Prototype</title>
+  <title>Usagi Yojimbo</title>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <link rel="stylesheet" href="./style.css?v=8" />
+  <link rel="stylesheet" href="./style.css?v=9" />
 </head>
 <body>
   <div id="game-root" class="root">
     <canvas id="game" width="256" height="224" aria-label="Game canvas"></canvas>
 
-    <!-- Title / Start overlay -->
-    <div id="title-overlay" class="overlay visible" role="dialog" aria-label="Title Screen">
-      <div class="panel">
-        <h1 class="title">Usagi Prototype</h1>
-        <p class="subtitle">Side-scrolling SNES-style demo</p>
-        <button id="start-btn" type="button" class="btn">Start</button>
-        <p class="hint">Tip: press <kbd>Enter</kbd> on desktop, or tap anywhere to start</p>
-        <div id="load-report" class="mini-report"></div>
-      </div>
-    </div>
+    <!-- Title Screen -->
+    <section id="title-overlay" class="title visible" role="dialog" aria-label="Title Screen">
+      <div class="title__bg"></div>
+      <div class="title__scrim"></div>
+      <div class="title__content">
+        <h1 class="logo">
+          <span class="logo__usagi">USAGI</span>
+          <span class="logo__yojimbo">YOJIMBO</span>
+        </h1>
 
-    <!-- Touch controls -->
+        <button id="start-btn" type="button" class="btn btn--primary">Start</button>
+        <p class="title__hint">Press <kbd>Enter</kbd> or tap anywhere</p>
+      </div>
+    </section>
+
+    <!-- Touch controls (hidden until game starts) -->
     <div id="touch-controls" class="touch hidden" aria-hidden="true">
       <button id="btn-left"   class="tc tc-left"  aria-label="Left"></button>
       <button id="btn-right"  class="tc tc-right" aria-label="Right"></button>
@@ -29,11 +33,11 @@
       <button id="btn-attack" class="tc tc-attack" aria-label="Attack"></button>
     </div>
 
-    <!-- In-game HUD log (for mobile debugging) -->
+    <!-- HUD log (optional) -->
     <div id="hud-log" class="hud-log"></div>
   </div>
 
-  <script defer src="./game.js?v=8"></script>
+  <script defer src="./game.js?v=9"></script>
   <noscript>This game requires JavaScript to run.</noscript>
 </body>
 </html>
