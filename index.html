@@ -1,43 +1,20 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Usagi Yojimbo</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <link rel="stylesheet" href="./style.css?v=9" />
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="game-root" class="root">
-    <canvas id="game" width="256" height="224" aria-label="Game canvas"></canvas>
-
-    <!-- Title Screen -->
-    <section id="title-overlay" class="title visible" role="dialog" aria-label="Title Screen">
-      <div class="title__bg"></div>
-      <div class="title__scrim"></div>
-      <div class="title__content">
-        <h1 class="logo">
-          <span class="logo__usagi">USAGI</span>
-          <span class="logo__yojimbo">YOJIMBO</span>
-        </h1>
-
-        <button id="start-btn" type="button" class="btn btn--primary">Start</button>
-        <p class="title__hint">Press <kbd>Enter</kbd> or tap anywhere</p>
-      </div>
-    </section>
-
-    <!-- Touch controls (hidden until game starts) -->
-    <div id="touch-controls" class="touch hidden" aria-hidden="true">
-      <button id="btn-left"   class="tc tc-left"  aria-label="Left"></button>
-      <button id="btn-right"  class="tc tc-right" aria-label="Right"></button>
-      <button id="btn-jump"   class="tc tc-jump"  aria-label="Jump"></button>
-      <button id="btn-attack" class="tc tc-attack" aria-label="Attack"></button>
-    </div>
-
-    <!-- HUD log (optional) -->
-    <div id="hud-log" class="hud-log"></div>
+  <div id="title-screen" class="screen">
+    <h1 class="game-title">USAGI<br><span class="subtitle">YOJIMBO</span></h1>
+    <button id="start-button">Start</button>
+    <p class="instructions">Press <kbd>Enter</kbd> or tap anywhere</p>
   </div>
 
-  <script defer src="./game.js?v=9"></script>
-  <noscript>This game requires JavaScript to run.</noscript>
+  <canvas id="gameCanvas" width="800" height="450"></canvas>
+
+  <script src="game.js"></script>
 </body>
 </html>
