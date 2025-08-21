@@ -21,12 +21,29 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;background:#000;bor
 #bar-fill{height:100%;width:0%;background:#4c7cf4}
 kbd{background:#222;border:1px solid #444;border-bottom-color:#111;padding:2px 6px;border-radius:4px}
 
-/* Touch */
+/* Touch controls */
 .touch{position:absolute;inset:0;pointer-events:none;z-index:40}
-.tc{position:absolute;width:var(--btn);height:var(--btn);border-radius:18px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(6px);pointer-events:auto}
+.tc{
+  position:absolute; width:var(--btn); height:var(--btn);
+  border-radius:18px; background:rgba(16,24,28,.65);
+  border:1px solid rgba(255,255,255,.12); backdrop-filter: blur(6px);
+  pointer-events:auto;
+  display:grid; place-items:center; overflow:hidden;
+}
+.tc::after{
+  /* icon placeholder; actual icon is applied inline from JS as background-image */
+  content:""; width:70%; height:70%;
+  background-repeat:no-repeat; background-position:center; background-size:contain;
+  opacity:.95; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));
+}
 .tc-left{left:var(--gap);bottom:var(--gap)}
 .tc-right{left:calc(var(--gap) + var(--btn) + var(--gap));bottom:var(--gap)}
 .tc-jump{right:calc(var(--gap) + var(--btn) + var(--gap));bottom:var(--gap)}
 .tc-attack{right:var(--gap);bottom:var(--gap)}
 .hidden{display:none!important}
-.hud{position:absolute;top:10px;left:10px;z-index:45;font:10px/1.3 monospace;white-space:pre-wrap;max-width:95%;padding:6px 8px;background:rgba(0,0,0,.45);border-radius:6px;border:1px solid rgba(255,255,255,.12)}
+
+.hud{
+  position:absolute;top:10px;left:10px;z-index:45;font:10px/1.3 monospace;
+  white-space:pre-wrap;max-width:95%;padding:6px 8px;
+  background:rgba(0,0,0,.45);border-radius:6px;border:1px solid rgba(255,255,255,.12)
+}
