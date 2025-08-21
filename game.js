@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const BASE_W = 256, BASE_H = 224;
+  const BASE_W = 256, BASE_H = 224; // SNES-like logical res
 
-  // DOM refs
+  // DOM
   const root = document.getElementById('root');
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d', { alpha: true });
@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const log = (...a)=>{ const s=a.join(' '); console.log(s); hud.textContent = (hud.textContent+'\n'+s).trim().slice(-900); };
 
-  /* ---------------- Layout / scale ---------------- */
+  /* ---------- Layout: fill and center the viewport ---------- */
   function resize() {
     canvas.width = BASE_W; canvas.height = BASE_H;
     const scale = Math.max(1, Math.floor(Math.min(
@@ -24,7 +24,10 @@ document.addEventListener('DOMContentLoaded', () => {
     )));
     const w = BASE_W * scale, h = BASE_H * scale;
     canvas.style.width = w+'px'; canvas.style.height = h+'px';
-    root.style.width = canvas.style.width; root.style.height = canvas.style.height;
+
+    // make the root box match the canvas so overlays/buttons align
+    root.style.width = canvas.style.width;
+    root.style.height = canvas.style.height;
 
     const shortest = Math.min(w,h);
     const btn = Math.max(48, Math.min(96, Math.floor(shortest/6)));
@@ -35,14 +38,13 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('resize', resize, { passive:true });
   resize();
 
-  /* ---------------- State machine ---------------- */
+  /* ---------- State ---------- */
   let state = 'TITLE'; // 'TITLE' | 'LOADING' | 'PLAY'
   let last = 0;
-  let frameCount = 0;
 
-  /* ---------------- Input ---------------- */
+  /* ---------- Input ---------- */
   const input = { left:false, right:false, jump:false, attack:false };
-  function bindHold(id, setter){
+  function hold(id, setter){
     const el = document.getElementById(id); if(!el) return;
     const down = e=>{ e.preventDefault(); setter(true); };
     const up   = e=>{ e.preventDefault(); setter(false); };
@@ -51,10 +53,10 @@ document.addEventListener('DOMContentLoaded', () => {
     el.addEventListener('pointercancel', up, { passive:false });
     el.addEventListener('pointerleave',  up, { passive:false });
   }
-  bindHold('left',  v=>input.left=v);
-  bindHold('right', v=>input.right=v);
-  bindHold('jump',  v=>input.jump=v);
-  bindHold('attack',v=>input.attack=v);
+  hold('left', v=>input.left=v);
+  hold('right',v=>input.right=v);
+  hold('jump', v=>input.jump=v);
+  hold('attack',v=>input.attack=v);
 
   window.addEventListener('keydown', e=>{
     const k=e.code;
@@ -62,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(k==='ArrowRight'||k==='KeyD') input.right=true;
     if(k==='Space'||k==='ArrowUp'||k==='KeyW') input.jump=true;
     if(['KeyJ','KeyK','KeyZ','KeyX'].includes(k)) input.attack=true;
-    if((k==='Enter'||k==='NumpadEnter') && state==='TITLE') requestStart(e);
+    if((k==='Enter'||k==='NumpadEnter') && state==='TITLE') startRequest(e);
   }, { passive:false });
   window.addEventListener('keyup', e=>{
     const k=e.code;
@@ -72,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(['KeyJ','KeyK','KeyZ','KeyX'].includes(k)) input.attack=false;
   }, { passive:false });
 
-  const requestStart = (e)=>{
+  const startRequest = (e)=>{
     e?.preventDefault?.();
     if(state!=='TITLE') return;
     uiTitle.classList.remove('visible');
@@ -82,12 +84,12 @@ document.addEventListener('DOMContentLoaded', () => {
     bootstrap();
   };
   ['pointerdown','click','touchend'].forEach(ev=>{
-    btnStart.addEventListener(ev, requestStart, { passive:false });
-    uiTitle.addEventListener(ev, requestStart, { passive:false });
+    btnStart.addEventListener(ev, startRequest, { passive:false });
+    uiTitle.addEventListener(ev, startRequest, { passive:false });
   });
 
-  /* ---------------- Loader ---------------- */
-  const MANIFEST_PATH = 'assets/manifest/manifest.json';
+  /* ---------- Loader ---------- */
+  const MANIFEST_PATH = 'assets/manifest/manifest.json?v=7'; // cache-bust
   let manifest = null;
   const images = new Map();
   const missing = [];
@@ -97,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const img = new Image();
       img.onload = ()=>resolve({ok:true, path, img});
       img.onerror = ()=>resolve({ok:false, path, img:null});
-      img.src = path;
+      img.src = path + (path.includes('?')?'&':'?') + 'v=7'; // cache-bust each image
     });
   }
 
@@ -112,7 +114,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const paths = [];
 
-    // From manifest (usagi + ninja)
+    // Keep ONLY files that exist now (zero-errors manifest):
+    // usagi idle + walk, ninja idle; plus 6 backgrounds, and UI icons from assets/ui/
     if (manifest) {
       for (const char of Object.keys(manifest)) {
         for (const key of Object.keys(manifest[char])) {
@@ -122,53 +125,46 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Backgrounds
     for (let i=1;i<=6;i++) paths.push(`assets/background/background${i}.png`);
 
-    // UI button icons (correct directory)
     const UI_ICONS = {
       left:   'assets/ui/ui_left.png',
       right:  'assets/ui/ui_right.png',
       jump:   'assets/ui/ui_jump.png',
       attack: 'assets/ui/ui_attack.png',
     };
-    const uiIconPaths = Object.values(UI_ICONS);
-    paths.push(...uiIconPaths);
+    paths.push(...Object.values(UI_ICONS));
 
     const total = paths.length;
     let done = 0;
-    const tickBar = ()=>{
+    const tick = ()=>{
       const pct = total? Math.round(done/total*100):100;
       barFill.style.width = pct+'%';
       loadText.textContent = `Loaded images: ${done} / ${total}`;
     };
-    tickBar();
+    tick();
 
     const results = await Promise.allSettled(
-      paths.map(p => loadImage(p).then(r => { done++; tickBar(); return r; }))
+      paths.map(p => loadImage(p).then(r => { done++; tick(); return r; }))
     );
 
     for (const r of results) {
       if (r.status === 'fulfilled' && r.value.ok) {
-        images.set(r.value.path, r.value.img);
+        images.set(r.value.path.split('?')[0], r.value.img); // map by clean path
       } else if (r.status === 'fulfilled' && !r.value.ok) {
-        missing.push(r.value.path);
+        missing.push(r.value.path.split('?')[0]);
       } else if (r.status === 'rejected') {
         missing.push('<<load failed>>');
       }
     }
 
-    // Apply UI icons (CSS variable drives ::after background-image)
-    const setIcon = (id, path, fallbackGlyph)=>{
+    // Apply UI icons to buttons (via CSS var)
+    const setIcon = (id, path, fallback)=>{
       const el = document.getElementById(id);
-      if (!el) return;
-      if (images.has(path)) {
-        el.style.setProperty('--icon-url', `url("${path}")`);
-      } else {
-        el.textContent = fallbackGlyph;
-        el.style.fontWeight = '900';
-        el.style.fontSize = Math.floor(parseInt(getComputedStyle(el).width)*0.45)+'px';
-      }
+      const key = path; // clean path
+      if (images.has(key)) el.style.setProperty('--icon-url', `url("${path}?v=7")`);
+      else { el.textContent=fallback; el.style.fontWeight='900';
+             el.style.fontSize=Math.floor(parseInt(getComputedStyle(el).width)*0.45)+'px'; }
     };
     setIcon('left',   UI_ICONS.left,   '◀');
     setIcon('right',  UI_ICONS.right,  '▶');
@@ -185,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state='PLAY';
   }
 
-  /* ---------------- Sprites / Anims ---------------- */
+  /* ---------- Sprite helpers ---------- */
   class StripSheet {
     constructor(img, fw, fh, frames){ this.img=img; this.fw=fw; this.fh=fh; this.frames=frames||1; }
     rect(i){ const j=Math.max(0, Math.min(this.frames-1, i|0)); return {sx:j*this.fw+0.01, sy:0.01, sw:this.fw-0.02, sh:this.fh-0.02}; }
@@ -217,7 +213,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  let manifestBuilt=false;
+  /* ---------- Build actors from manifest ---------- */
+  let built=false;
   const player = new Actor();
   const enemies = [];
 
@@ -225,7 +222,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const out = {};
     if(!manifest || !manifest[charKey]) return out;
     for(const [name, meta] of Object.entries(manifest[charKey])){
-      const img = images.get(meta.src);
+      const key = meta.src;            // clean path without query
+      const img = images.get(key);
       if(!img) continue;
       out[name] = new StripSheet(img, meta.frameWidth, meta.frameHeight, meta.frames);
     }
@@ -235,54 +233,54 @@ document.addEventListener('DOMContentLoaded', () => {
     return out;
   }
 
-  /* ---------------- Update / Render / Loop ---------------- */
+  /* ---------- Update / Render ---------- */
   let scroll=0;
   function update(dt){
-    if(state==='PLAY'){
-      if(!manifestBuilt){
-        const usagi = buildSheets('usagi');
-        for(const [name,sheet] of Object.entries(usagi||{})) player.add(name,sheet,8,true);
-        if(player.has('idle')) player.play('idle'); else if(player.has('walk')) player.play('walk');
+    if(state!=='PLAY') return;
 
-        const e = new Actor();
-        const nin = buildSheets('ninja');
-        for(const [name,sheet] of Object.entries(nin||{})) e.add(name,sheet,8,true);
-        e.x=180; e.y=180; if(e.has('idle')) e.play('idle'); else if(e.has('walk')) e.play('walk');
-        enemies.push(e);
+    if(!built){
+      const usagi = buildSheets('usagi');
+      for(const [name,sheet] of Object.entries(usagi||{})) player.add(name,sheet,8,true);
+      if(player.has('idle')) player.play('idle'); else if(player.has('walk')) player.play('walk');
 
-        manifestBuilt=true;
-      }
+      const e = new Actor();
+      const nin = buildSheets('ninja');
+      for(const [name,sheet] of Object.entries(nin||{})) e.add(name,sheet,8,true);
+      e.x=180; e.y=180; if(e.has('idle')) e.play('idle'); else if(e.has('walk')) e.play('walk');
+      enemies.push(e);
 
-      if(input.left){ player.vx=-player.speed; player.flip=true; }
-      else if(input.right){ player.vx=player.speed; player.flip=false; }
-      else player.vx=0;
-
-      if(input.jump && player.onGround){ player.vy=player.jumpV; player.onGround=false; }
-
-      const busy = player.cur && !player.anims.get(player.cur).anim.loop;
-      if(input.attack && player.has('attack') && !busy) player.play('attack',true);
-
-      if(!busy){
-        if(!player.onGround && player.has('jump')) player.play('jump');
-        else if(Math.abs(player.vx)>0 && player.has('walk')) player.play('walk');
-        else if(player.has('idle')) player.play('idle');
-      }
-
-      player.update(dt);
-      enemies.forEach(e=>{
-        const d = player.x - e.x; e.flip = d<0; e.vx = Math.sign(d)*24;
-        if(e.has('walk')) e.play('walk'); e.update(dt);
-      });
-
-      scroll = (scroll + dt*18) % 512;
+      built=true;
     }
+
+    if(input.left){ player.vx=-player.speed; player.flip=true; }
+    else if(input.right){ player.vx=player.speed; player.flip=false; }
+    else player.vx=0;
+
+    if(input.jump && player.onGround){ player.vy=player.jumpV; player.onGround=false; }
+
+    const busy = player.cur && !player.anims.get(player.cur).anim.loop;
+    if(input.attack && player.has('attack') && !busy) player.play('attack',true);
+
+    if(!busy){
+      if(!player.onGround && player.has('jump')) player.play('jump');
+      else if(Math.abs(player.vx)>0 && player.has('walk')) player.play('walk');
+      else if(player.has('idle')) player.play('idle');
+    }
+
+    player.update(dt);
+    enemies.forEach(e=>{
+      const d = player.x - e.x; e.flip = d<0; e.vx = Math.sign(d)*24;
+      if(e.has('walk')) e.play('walk'); e.update(dt);
+    });
+
+    scroll = (scroll + dt*18) % 512;
   }
 
   function render(){
     ctx.clearRect(0,0,BASE_W,BASE_H);
     // Background (tiled)
     let bgImg = null;
-    for (let i=1;i<=6;i++){ const p=`assets/background/background${i}.png`; if(images.get(p)){ bgImg=images.get(p); break; } }
+    for (let i=1;i<=6;i++){ const p=`assets/background/background${i}.png`; const key=p; if(images.get(key)){ bgImg=images.get(key); break; } }
     if(bgImg){
       const scale = BASE_H / bgImg.height;
       const tw = Math.ceil(bgImg.width*scale);
@@ -294,9 +292,8 @@ document.addEventListener('DOMContentLoaded', () => {
     player.draw(ctx);
     enemies.forEach(e=>e.draw(ctx));
 
-    // small indicator for missing count
     if (missing.length) {
-      ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(6,6,130,16);
+      ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(6,6,160,18);
       ctx.fillStyle='#fff'; ctx.font='10px monospace';
       ctx.fillText(`Missing: ${missing.length}`, 10, 18);
     }
@@ -305,7 +302,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function loop(t){
     const dt = Math.min(0.05, (t-last)/1000)||0.0167; last=t;
     update(dt); render();
-    frameCount++;
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
