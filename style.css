@@ -1,117 +1,53 @@
 :root {
-  color-scheme: dark;
-  /* JS sets these at runtime based on canvas size */
-  --btn: 64px;   /* button size */
-  --gap: 16px;   /* spacing/margins */
+  --btn: 80px;
+  --gap: 16px;
+  -webkit-tap-highlight-color: transparent;
 }
 
-html, body { height: 100%; }
-body {
-  margin: 0;
-  background: #0b0b0b;
-  display: grid;
-  place-items: center;
-  touch-action: none;
-  user-select: none;
-}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background:#0b0b0b; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; touch-action: none; }
+.root { position: relative; margin: 0 auto; display:flex; align-items:center; justify-content:center; padding: 16px; }
 
-#game-root { position: relative; }
+canvas { image-rendering: pixelated; image-rendering: crisp-edges; background:#000; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
 
-canvas {
-  image-rendering: optimizeSpeed;
-  image-rendering: -moz-crisp-edges;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  -ms-interpolation-mode: nearest-neighbor;
-  transform: translateZ(0);
-  box-shadow: 0 0.5rem 2rem rgba(0,0,0,0.6);
-  background: #000;
-  border-radius: 12px;
-}
-
-/* Overlays */
 .overlay {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(0,0,0,0.55);
-  border-radius: 12px;
-  z-index: 10;
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,.55) 0%, rgba(0,0,0,.85) 70%);
+  z-index: 50; pointer-events: auto;
 }
-.hidden { display: none !important; }
+.overlay.hidden { display:none; }
+.overlay.visible { display:flex; }
 
 .panel {
-  background: rgba(16,16,20,0.9);
-  color: #e6e6e6;
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
-  padding: 16px 20px;
-  text-align: center;
-  width: min(92vw, 420px);
-}
-.panel h1, .panel h2 { margin: 0 0 8px; font-weight: 800; }
-.panel .sub { opacity: 0.8; }
-
-.start-btn {
-  appearance: none;
-  border: 1px solid #3a7bd5;
-  background: linear-gradient(#2b6cb0, #225ea8);
-  color: #fff;
-  border-radius: 10px;
-  padding: 10px 18px;
-  font-size: 16px;
-  font-weight: 700;
-  margin: 8px 0 4px;
+  width:min(92vw, 520px);
+  background:rgba(22,22,26,.92);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;
+  padding:24px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.03);
+  text-align:center;
 }
 
-#report-log {
-  text-align: left;
-  max-height: 40vh;
-  overflow: auto;
-  background: #0e0e12;
-  border: 1px solid #202022;
-  border-radius: 8px;
-  padding: 10px;
-  color: #bfe3ff;
-}
-
-/* Touch controls */
-#touch-controls {
-  position: absolute;
-  inset: 0;
-  pointer-events: none; /* buttons themselves re-enable */
-  z-index: 5;
-}
-
-.cluster {
-  position: absolute;
-  display: flex;
-  gap: var(--gap);
-  pointer-events: none; /* buttons handle interaction */
-}
-
-.cluster.left  { left:  var(--gap); bottom: var(--gap); flex-direction: row; }
-.cluster.right { right: var(--gap); bottom: var(--gap); flex-direction: column; }
+.title { margin: 0 0 8px; font-size: clamp(24px, 4.2vw, 40px); letter-spacing:.5px; }
+.subtitle { margin: 0 0 16px; opacity:.9; }
+.hint { margin-top: 8px; opacity:.6; font-size:.9rem; }
+kbd { background:#222; border:1px solid #444; border-bottom-color:#111; padding:1px 5px; border-radius:4px; }
 
 .btn {
-  width: var(--btn);
-  height: var(--btn);
-  border-radius: 12px;
-  background: rgba(0,0,0,0.25);
-  border: 1px solid rgba(255,255,255,0.08);
-  backdrop-filter: blur(2px);
-  pointer-events: auto;
-  touch-action: none;
+  appearance:none; border:0; border-radius:12px; padding:12px 18px;
+  background:#4c7cf4; color:#fff; font-weight:700; letter-spacing:.4px; cursor:pointer;
+  box-shadow: 0 4px 16px rgba(76,124,244,.35);
+}
+.btn:active { transform: translateY(1px); box-shadow: 0 3px 10px rgba(76,124,244,.3); }
+
+.touch { position:absolute; inset:0; pointer-events:none; z-index:40; }
+.tc {
+  position:absolute; width:var(--btn); height:var(--btn); border-radius:16px;
+  background: rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12);
+  backdrop-filter: blur(6px); pointer-events:auto;
 }
 
-/* Use your UI images */
-#btn-left   { background: url('assets/ui_left.png')  center/70% no-repeat, rgba(0,0,0,0.25); }
-#btn-right  { background: url('assets/ui_right.png') center/70% no-repeat, rgba(0,0,0,0.25); }
-#btn-jump   { background: url('assets/ui_jump.png')  center/80% no-repeat, rgba(0,0,0,0.25); }
-#btn-attack { background: url('assets/ui_attack.png')center/80% no-repeat, rgba(0,0,0,0.25); }
-
-/* Hide buttons on wide desktop; JS still toggles during play */
-@media (min-width: 900px) {
-  #touch-controls { display: none; }
-}
+.tc-left   { left: var(--gap); bottom: var(--gap); }
+.tc-right  { left: calc(var(--gap) + var(--btn) + var(--gap)); bottom: var(--gap); }
+.tc-jump   { right: calc(var(--gap) + var(--btn) + var(--gap)); bottom: var(--gap); }
+.tc-attack { right: var(--gap); bottom: var(--gap); }
