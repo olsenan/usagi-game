@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "usagi": {
+    "idle":   { "path": "assets/sprites/usagi/idle.png",   "frames": 4, "fps": 6,  "loop": true  },
+    "walk":   { "path": "assets/sprites/usagi/walk.png",   "frames": 6, "fps": 10, "loop": true  },
+    "jump":   { "path": "assets/sprites/usagi/jump.png",   "frames": 2, "fps": 10, "loop": false },
+    "attack": { "path": "assets/sprites/usagi/attack.png", "frames": 6, "fps": 12, "loop": false }
+  },
+  "ninja": {
+    "idle":   { "path": "assets/sprites/ninja/idle.png",   "frames": 4, "fps": 6,  "loop": true  },
+    "walk":   { "path": "assets/sprites/ninja/walk.png",   "frames": 6, "fps": 10, "loop": true  },
+    "jump":   { "path": "assets/sprites/ninja/jump.png",   "frames": 2, "fps": 10, "loop": false },
+    "attack": { "path": "assets/sprites/ninja/attack.png", "frames": 4, "fps": 12, "loop": false }
+  }
+}
