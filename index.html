@@ -11,26 +11,27 @@
     <div id="game-root">
       <canvas id="game" width="256" height="224" aria-label="Game canvas"></canvas>
 
-      <!-- Title overlay -->
-      <div id="title-overlay" class="overlay hidden">
+      <!-- Title / Start overlay -->
+      <div id="title-overlay" class="overlay">
         <div class="panel">
           <h1>Usagi Prototype</h1>
           <p>Side-scrolling SNES-style demo</p>
-          <p class="sub">Press <b>Enter</b> / tap to start</p>
+          <button id="start-btn" class="start-btn">Start</button>
+          <p class="sub">Press <b>Enter</b> or tap anywhere</p>
         </div>
       </div>
 
-      <!-- Error overlay (asset preflight / debug) -->
-      <div id="error-overlay" class="overlay hidden">
+      <!-- Error/report overlay (only shown if there’s an error) -->
+      <div id="report-overlay" class="overlay hidden">
         <div class="panel">
           <h2>Asset Load Report</h2>
-          <pre id="error-log"></pre>
-          <button id="error-close">Close</button>
+          <pre id="report-log"></pre>
+          <button id="report-close">Close</button>
         </div>
       </div>
 
-      <!-- Mobile controls -->
-      <div id="touch-controls" aria-hidden="true">
+      <!-- Mobile controls (shown only during play) -->
+      <div id="touch-controls" class="hidden" aria-hidden="true">
         <button class="btn dpad left"  id="btn-left"  title="Left"></button>
         <button class="btn dpad right" id="btn-right" title="Right"></button>
         <button class="btn act jump"    id="btn-jump"  title="Jump"></button>
