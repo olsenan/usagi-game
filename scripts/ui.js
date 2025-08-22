@@ -1,43 +1,25 @@
 // scripts/ui.js
-// Robust UI bootstrap: waits for DOM and tolerates either kebab-case or camelCase IDs.
-export function bootUI(actions) {
-  const init = () => {
-    const $ = (id) => document.getElementById(id);
-    const pick = (...ids) => ids.map($).find(Boolean);
-    const req = (el, ...names) => {
-      if (!el) console.error("Missing UI element with id:", names.join(" or "));
-      return el;
-    };
+// Event delegation so we never touch null elements; supports kebab/camel IDs.
 
-    // Accept both naming schemes
-    const btnStart    = req(pick("btnStart",   "btn-start"),   "btnStart",   "btn-start");
-    const btnEndless  = req(pick("btnEndless", "btn-challenge"), "btnEndless","btn-challenge");
-    const btnResume   = req(pick("btnResume",  "btn-resume"),  "btnResume",  "btn-resume");
-    const btnQuit     = req(pick("btnQuit",    "btn-quit"),    "btnQuit",    "btn-quit");
-
-    // Optional panels/HUD (don’t fail if your HTML names differ)
-    const titlePanel  = pick("title", "title-screen");
-    const pausedPanel = pick("paused", "pause-screen");
-    const hud         = $("hud");
-
-    if (btnStart)   btnStart.onclick   = () => actions.start && actions.start();
-    if (btnEndless) btnEndless.onclick = () => actions.endless && actions.endless();
-    if (btnResume)  btnResume.onclick  = () => actions.resume && actions.resume();
-    if (btnQuit)    btnQuit.onclick    = () => actions.quit && actions.quit();
-
-    // A couple helpers you may call from game code if you want
-    window.__UI = {
-      showTitle(show=true){ if (titlePanel) titlePanel.classList.toggle("hidden", !show); },
-      showPaused(show=true){ if (pausedPanel) pausedPanel.classList.toggle("hidden", !show); },
-      showHUD(show=true){ if (hud) hud.classList.toggle("hidden", !show); },
-    };
+export function bootUI(actions = {}) {
+  const map = {
+    "btnStart": "start", "btn-start": "start",
+    "btnEndless": "endless", "btn-challenge": "endless",
+    "btnResume": "resume", "btn-resume": "resume",
+    "btnQuit": "quit", "btn-quit": "quit"
   };
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init, { once: true });
-  } else {
-    init();
-  }
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    const act = map[btn.id];
+    if (act && typeof actions[act] === "function") actions[act]();
+  });
 
-  return actions || {};
+  const $ = (sel) => document.querySelector(sel);
+  window.__UI = {
+    showTitle(show=true){ const el=$("#title")||$("#title-screen"); if (el) el.classList.toggle("hidden", !show); el?.classList.toggle("visible", show); },
+    showPaused(show=true){ const el=$("#paused")||$("#pause-screen"); if (el) el.classList.toggle("hidden", !show); el?.classList.toggle("visible", show); },
+    showHUD(show=true){ const el=$("#hud"); if (el) el.classList.toggle("hidden", !show); }
+  };
 }
