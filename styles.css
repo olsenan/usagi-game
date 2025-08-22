@@ -29,7 +29,7 @@ canvas#game {
   image-rendering: pixelated;
   border-radius: 12px;
   box-shadow: 0 12px 48px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.03);
-  background: #111; /* fallback while loading */
+  background: #111;
 }
 
 #overlay {
@@ -83,6 +83,7 @@ button:active { transform: translateY(1px); }
   background: #0f1218;
   color: var(--text);
 }
+
 .hidden { display: none; }
 
 .footer { opacity: .65; margin-top: 8px; font-size: 12px; }
