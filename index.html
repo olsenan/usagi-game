@@ -8,25 +8,43 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div id="ui">
+    <div id="title">
+      <h1>Usagi Arcade Brawler</h1>
+      <button id="btnStart">Start</button>
+      <button id="btnEndless">Infinite Challenge</button>
+      <p class="credit">© You, 2025</p>
+    </div>
+
+    <div id="paused" class="hidden">
+      <h2>Paused</h2>
+      <button id="btnResume">Resume</button>
+      <button id="btnQuit">Quit</button>
+    </div>
+
+    <div id="hud" class="hidden">
+      <div id="health"><span id="hpFill"></span></div>
+      <div id="score">Score: <b id="scoreNum">0</b></div>
+    </div>
+  </div>
+
   <canvas id="game" width="960" height="540"></canvas>
 
-  <!-- Load scripts in the right order; using modules keeps imports clean -->
   <script type="module">
-    import { preloadAll, Assets } from "./scripts/preload.js";
-    import { startGame } from "./scripts/game.js"; // ensure this exists at scripts/game.js
+    import { bootUI } from "./scripts/ui.js";
+    import { startGame, quitGame, setPaused, isRunning } from "./scripts/game.js";
 
-    (async () => {
-      try {
-        const loaded = await preloadAll();
-        // Pass loaded assets (images & audio elements) to your game bootstrap
-        await startGame({ assets: loaded, manifest: Assets });
-      } catch (err) {
-        console.error(err);
-        const p = document.createElement("p");
-        p.textContent = err.message;
-        document.body.appendChild(p);
-      }
-    })();
+    const ui = bootUI({
+      start:    () => startGame({ mode: "story" }),
+      endless:  () => startGame({ mode: "endless" }),
+      resume:   () => setPaused(false),
+      quit:     () => quitGame(),
+    });
+
+    // Keyboard pause toggle
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && isRunning()) setPaused(true);
+    });
   </script>
 </body>
 </html>
