@@ -29,22 +29,30 @@
   </div>
 
   <canvas id="game" width="960" height="540"></canvas>
+<script type="module">
+  import { bootUI } from "./scripts/ui.js";
+  import { startGame, quitGame, setPaused, isRunning } from "./scripts/game.js";
 
-  <script type="module">
-    import { bootUI } from "./scripts/ui.js";
-    import { startGame, quitGame, setPaused, isRunning } from "./scripts/game.js";
-
-    const ui = bootUI({
-      start:    () => startGame({ mode: "story" }),
-      endless:  () => startGame({ mode: "endless" }),
-      resume:   () => setPaused(false),
-      quit:     () => quitGame(),
+  const init = () => {
+    bootUI({
+      start:   () => startGame({ mode: "story" }),
+      endless: () => startGame({ mode: "endless" }),
+      resume:  () => setPaused(false),
+      quit:    () => quitGame(),
     });
 
-    // Keyboard pause toggle
+    // Optional: Esc to pause
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && isRunning()) setPaused(true);
     });
-  </script>
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init, { once: true });
+  } else {
+    init();
+  }
+</script>
+
 </body>
 </html>
