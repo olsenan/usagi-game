@@ -6,6 +6,16 @@
   <base href="./" />
   <title>Usagi Arcade Brawler</title>
   <link rel="stylesheet" href="styles.css" />
+  <!-- inline favicon: tiny bunny -->
+  <link rel="icon" href="data:image/svg+xml;utf8,
+    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
+      <rect width='64' height='64' rx='12' fill='%230b1220'/>
+      <circle cx='32' cy='36' r='16' fill='%23fff'/>
+      <ellipse cx='24' cy='14' rx='5' ry='10' fill='%23fff'/>
+      <ellipse cx='40' cy='14' rx='5' ry='10' fill='%23fff'/>
+      <circle cx='27' cy='34' r='3' fill='%230a0a0a'/>
+      <circle cx='37' cy='34' r='3' fill='%230a0a0a'/>
+    </svg>">
   <!-- tiny guard if CSS fails -->
   <style>.hidden{display:none}.panel{display:none}.panel.visible{display:block}body{background:#0e0f13;color:#e8f0ff;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}</style>
 </head>
@@ -23,15 +33,3 @@
       <button id="btnResume">Resume</button>
       <button id="btnQuit">Quit</button>
     </div>
-
-    <div id="hud" class="hidden">
-      <div id="health"><span id="hpFill"></span></div>
-      <div id="score">Score: <b id="scoreNum">0</b></div>
-    </div>
-  </div>
-
-  <canvas id="game" width="960" height="540"></canvas>
-
-  <script type="module" src="scripts/main.js"></script>
-</body>
-</html>
