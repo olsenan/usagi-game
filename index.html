@@ -6,17 +6,19 @@
   <base href="./" />
   <title>Usagi Arcade Brawler</title>
   <link rel="stylesheet" href="styles.css" />
+  <!-- tiny guard if CSS fails -->
+  <style>.hidden{display:none}.panel{display:none}.panel.visible{display:block}body{background:#0e0f13;color:#e8f0ff;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}</style>
 </head>
 <body>
   <div id="ui">
-    <div id="title">
+    <div id="title" class="panel visible">
       <h1>Usagi Arcade Brawler</h1>
       <button id="btnStart">Start</button>
       <button id="btnEndless">Infinite Challenge</button>
       <p class="credit">© You, 2025</p>
     </div>
 
-    <div id="paused" class="hidden">
+    <div id="paused" class="panel hidden">
       <h2>Paused</h2>
       <button id="btnResume">Resume</button>
       <button id="btnQuit">Quit</button>
@@ -29,30 +31,7 @@
   </div>
 
   <canvas id="game" width="960" height="540"></canvas>
-<script type="module">
-  import { bootUI } from "./scripts/ui.js";
-  import { startGame, quitGame, setPaused, isRunning } from "./scripts/game.js";
 
-  const init = () => {
-    bootUI({
-      start:   () => startGame({ mode: "story" }),
-      endless: () => startGame({ mode: "endless" }),
-      resume:  () => setPaused(false),
-      quit:    () => quitGame(),
-    });
-
-    // Optional: Esc to pause
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && isRunning()) setPaused(true);
-    });
-  };
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init, { once: true });
-  } else {
-    init();
-  }
-</script>
-
+  <script type="module" src="scripts/main.js"></script>
 </body>
 </html>
