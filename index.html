@@ -1,109 +1,32 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-    <title>Usagi Arcade Brawler</title>
-    <link rel="stylesheet" href="./styles.css" />
-    <style>
-      /* Guard so panels don’t all appear if styles.css fails */
-      .panel{display:none} .panel.visible{display:block}
-      body{background:#0e0f13;color:#e8f0ff;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    </style>
-  </head>
-  <body>
-    <div id="game-root">
-      <canvas id="game" width="960" height="540"></canvas>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <base href="./" />
+  <title>Usagi Arcade Brawler</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="game" width="960" height="540"></canvas>
 
-      <div id="overlay">
-        <div id="title-screen" class="panel visible">
-          <h1>Usagi Arcade Brawler</h1>
-          <button id="btn-start">Start</button>
-          <button id="btn-challenge">Infinite Challenge</button>
-          <div class="footer">© You, 2025</div>
-        </div>
+  <!-- Load scripts in the right order; using modules keeps imports clean -->
+  <script type="module">
+    import { preloadAll, Assets } from "./scripts/preload.js";
+    import { startGame } from "./scripts/game.js"; // ensure this exists at scripts/game.js
 
-        <div id="pause-screen" class="panel">
-          <h2>Paused</h2>
-          <button id="btn-resume">Resume</button>
-          <button id="btn-quit">Quit</button>
-        </div>
-
-        <div id="gameover-screen" class="panel">
-          <h2>Game Over</h2>
-          <p id="final-score">Score: 0</p>
-          <div id="initials-entry" class="hidden">
-            <label>Enter Initials:</label>
-            <input id="initials" maxlength="3" />
-            <button id="btn-save-score">Save</button>
-          </div>
-          <button id="btn-retry">Retry</button>
-          <button id="btn-menu">Main Menu</button>
-          <div id="hiscore-block">
-            <h3>High Scores</h3>
-            <ol id="hiscore-list"></ol>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Inline manifest fallback so file:// also works -->
-    <script id="manifest-inline" type="application/json">
-    {
-      "meta": { "frameWidth": 96, "frameHeight": 96, "baseScale": 2.5, "groundY": 420 },
-      "characters": {
-        "usagi": {
-          "speed": 150, "jumpVelocity": -420, "gravity": 1100,
-          "animations": {
-            "idle":   { "path": "assets/sprites/usagi/idle.png",   "frames": 4, "fps": 8,  "loop": true },
-            "walk":   { "path": "assets/sprites/usagi/walk.png",   "frames": 8, "fps": 12, "loop": true },
-            "attack": { "path": "assets/sprites/usagi/attack.png", "frames": 8, "fps": 18, "loop": false, "hitFrames": [3,4,5] },
-            "jump":   { "path": "assets/sprites/usagi/jump.png",   "frames": 4, "fps": 9,  "loop": false },
-            "hurt":   { "path": "assets/sprites/usagi/hurt.png",   "frames": 4, "fps": 10, "loop": false },
-            "death":  { "path": "assets/sprites/usagi/death.png",  "frames": 6, "fps": 8,  "loop": false }
-          },
-          "hitbox": { "x": 28, "y": 24, "w": 40, "h": 64 }
-        },
-        "ninja": {
-          "speed": 120, "jumpVelocity": -380, "gravity": 1100,
-          "ai": { "aggroRange": 420, "attackRange": 68, "attackCooldown": 0.9 },
-          "animations": {
-            "idle":   { "path": "assets/sprites/ninja/idle.png",   "frames": 4, "fps": 8,  "loop": true },
-            "walk":   { "path": "assets/sprites/ninja/walk.png",   "frames": 8, "fps": 12, "loop": true },
-            "attack": { "path": "assets/sprites/ninja/attack.png", "frames": 6, "fps": 14, "loop": false, "hitFrames": [2,3] },
-            "jump":   { "path": "assets/sprites/ninja/jump.png",   "frames": 4, "fps": 9,  "loop": false },
-            "hurt":   { "path": "assets/sprites/ninja/hurt.png",   "frames": 4, "fps": 10, "loop": false },
-            "death":  { "path": "assets/sprites/ninja/death.png",  "frames": 6, "fps": 8,  "loop": false }
-          },
-          "hitbox": { "x": 30, "y": 26, "w": 36, "h": 60 }
-        }
-      },
-      "ui": {
-        "healthBar": "assets/ui/health_bar.png",
-        "pauseIcon": "assets/ui/pause_icon.png",
-        "startButton": "assets/ui/start_button.png"
-      },
-      "audio": {
-        "bgm": "assets/audio/bgm_level1.ogg",
-        "sfx": {
-          "attack": "assets/audio/attack.wav",
-          "hit": "assets/audio/hit.wav",
-          "jump": "assets/audio/jump.wav",
-          "death": "assets/audio/death.wav"
-        },
-        "bgmVolume": 0.5,
-        "sfxVolume": 0.8
-      },
-      "modes": {
-        "story": { "waves": [ { "ninja": 3 }, { "ninja": 5 }, { "ninja": 7 } ] },
-        "challenge": { "spawnEverySec": 3.0, "spawnScale": 0.1 }
+    (async () => {
+      try {
+        const loaded = await preloadAll();
+        // Pass loaded assets (images & audio elements) to your game bootstrap
+        await startGame({ assets: loaded, manifest: Assets });
+      } catch (err) {
+        console.error(err);
+        const p = document.createElement("p");
+        p.textContent = err.message;
+        document.body.appendChild(p);
       }
-    }
-    </script>
-
-    <script src="./scripts/preload.js"></script>
-    <script src="./scripts/ui.js"></script>
-    <script src="./scripts/game.js"></script>
-    <script src="./scripts/main.js"></script>
-  </body>
+    })();
+  </script>
+</body>
 </html>
