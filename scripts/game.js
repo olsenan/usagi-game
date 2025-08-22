@@ -1,249 +1,174 @@
 // scripts/game.js
-import { preloadImages } from "./preload.js";
+import { bootUI } from "./ui.js";
+import { loadSheets, AnimDefs } from "./preload.js";
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-let state = {
-  running: false,
-  paused: false,
-  mode: "story",
-  assets: null,
-  player: null,
-  enemies: [],
-  lastSpawn: 0,
-  score: 0,
-  input: { left:false, right:false, up:false, attack:false }
-};
+const K = { GRAV: 1500, SPEED: 240, JUMP: 520 };
+let world;
 
-// Simple WebAudio pips so we don't need audio files
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-const beep = (freq=440, dur=0.08, gain=0.03) => {
-  const osc = audioCtx.createOscillator();
-  const g = audioCtx.createGain();
-  osc.frequency.value = freq; osc.type = "square";
-  g.gain.value = gain;
-  osc.connect(g); g.connect(audioCtx.destination);
-  osc.start(); osc.stop(audioCtx.currentTime + dur);
-};
+const beep = (f=440,d=.08,g=.03)=>{const o=audioCtx.createOscillator(),u=audioCtx.createGain();o.type="square";o.frequency.value=f;u.gain.value=g;o.connect(u);u.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);};
 
-export const isRunning = () => state.running;
-export function setPaused(p) {
-  state.paused = p;
-  document.getElementById("paused").classList.toggle("hidden", !p);
-}
-export function quitGame() {
-  state.running = false;
-  document.getElementById("title").classList.remove("hidden");
-  document.getElementById("hud").classList.add("hidden");
+class Animated {
+  constructor(sheet){ Object.assign(this, sheet); this.time=0; this.frame=0; }
+  reset(){ this.time=0; this.frame=0; }
+  update(dt){ this.time+=dt; const total=this.frames||1; const f=this.time*(this.fps||8); this.frame = this.loop? Math.floor(f)%total : Math.min(total-1, Math.floor(f)); }
 }
 
-export async function startGame({ mode }) {
-  if (state.running) return;
-  state = { ...state, running:true, paused:false, mode, enemies:[], score:0 };
-  document.getElementById("title").classList.add("hidden");
-  document.getElementById("hud").classList.remove("hidden");
-  document.getElementById("scoreNum").textContent = "0";
-  document.getElementById("hpFill").style.width = "100%";
+function makeEntity(kind, sheets, x, y){
+  const anims = {};
+  for (const [state, meta] of Object.entries(sheets[kind])) anims[state] = new Animated(meta);
+  return {
+    kind, x, y, vx:0, vy:0, dir:1, hp: kind==="usagi"?100:30, maxHp: kind==="usagi"?100:30,
+    state:"idle", anims, inv:0, atkLock:0
+  };
+}
 
-  // Load images
-  state.assets = await preloadImages();
+function current(e){ return e.anims[e.state]; }
 
-  // Player
-  state.player = {
-    x: 120, y: 420, w: 64, h: 64,
-    vx:0, vy:0, grounded:true, hp:100,
-    facing: 1, anim:"idle", cooldown:0
+function intersects(a,b){ const hbA=hitbox(a), hbB=hitbox(b); return hbA.x < hbB.x+hbB.w && hbA.x+hbA.w > hbB.x && hbA.y < hbB.y+hbB.h && hbA.y+hbA.h > hbB.y; }
+function hitbox(e){ // centered around sprite; tuned for 96x96
+  return { x:e.x-20, y:e.y-64, w:40, h:60 };
+}
+
+export function isRunning(){ return world?.running; }
+export function setPaused(p){ world.paused=p; window.__UI.showPaused(p); }
+export function quitGame(){ world.running=false; window.__UI.showTitle(true); window.__UI.showHUD(false); }
+
+export async function startGame({ mode }){
+  if (world?.running) return;
+  window.__UI.showTitle(false); window.__UI.showHUD(true);
+
+  const sheets = await loadSheets();
+  world = {
+    running:true, paused:false, mode: mode||"story", sheets,
+    player: makeEntity("usagi", sheets, 120, AnimDefs.meta.groundY),
+    enemies: [],
+    groundY: AnimDefs.meta.groundY,
+    scale: AnimDefs.meta.scale || 2.5,
+    last: performance.now(), lastSpawn: 0, score: 0,
+    input: { left:false, right:false, up:false, atk:false }
   };
 
-  // Input
-  setupInput();
+  setupInput(world.input);
+  loop();
+}
 
-  // Start loop
-  let last = performance.now();
-  const loop = (now) => {
-    if (!state.running) return;
-    const dt = Math.min(33, now - last) / 1000; last = now;
-    if (!state.paused) update(dt, now);
-    draw();
-    requestAnimationFrame(loop);
-  };
+function setupInput(k){
+  const set=(c,v)=>k[c]=v;
+  window.addEventListener("keydown",(e)=>{
+    if (e.repeat) return;
+    if (e.key==="ArrowLeft"||e.key==="a") set("left",true);
+    if (e.key==="ArrowRight"||e.key==="d") set("right",true);
+    if (e.key==="ArrowUp"||e.key==="w"||e.key===" ") set("up",true);
+    if (e.key==="j"||e.key==="k"||e.key==="Enter") set("atk",true);
+    if (e.key==="Escape" && world.running) setPaused(true);
+  });
+  window.addEventListener("keyup",(e)=>{
+    if (e.key==="ArrowLeft"||e.key==="a") set("left",false);
+    if (e.key==="ArrowRight"||e.key==="d") set("right",false);
+    if (e.key==="ArrowUp"||e.key==="w"||e.key===" ") set("up",false);
+    if (e.key==="j"||e.key==="k"||e.key==="Enter") set("atk",false);
+  });
+}
+
+function loop(){
+  if (!world?.running) return;
+  const now = performance.now();
+  const dt = Math.min(33, now - world.last) / 1000; world.last = now;
+  if (!world.paused) update(dt, now);
+  draw();
   requestAnimationFrame(loop);
 }
 
-function setupInput() {
-  const k = state.input;
-  const down = (c,v) => (k[c]=v);
-  window.onkeydown = (e) => {
-    if (e.repeat) return;
-    if (e.key === "ArrowLeft" || e.key === "a") down("left",true);
-    if (e.key === "ArrowRight"|| e.key === "d") down("right",true);
-    if (e.key === "ArrowUp"   || e.key === "w" || e.key===" ") down("up",true);
-    if (e.key === "j" || e.key === "k") down("attack",true);
-  };
-  window.onkeyup = (e) => {
-    if (e.key === "ArrowLeft" || e.key === "a") down("left",false);
-    if (e.key === "ArrowRight"|| e.key === "d") down("right",false);
-    if (e.key === "ArrowUp"   || e.key === "w" || e.key===" ") down("up",false);
-    if (e.key === "j" || e.key === "k") down("attack",false);
-  };
-}
+function update(dt, now){
+  const p = world.player;
+  const k = world.input;
 
-function update(dt, now) {
-  const p = state.player;
-  const k = state.input;
-
-  // gravity
-  p.vy += 1500 * dt;
+  // physics
+  p.vy += K.GRAV * dt;
 
   // move
-  let accel = 800;
-  if (k.left)  { p.vx = Math.max(p.vx - accel*dt, -240); p.facing = -1; }
-  if (k.right) { p.vx = Math.min(p.vx + accel*dt,  240); p.facing = 1; }
-  if (!k.left && !k.right) p.vx *= 0.82;
+  if (k.left)  { p.vx = -K.SPEED; p.dir=-1; }
+  else if (k.right) { p.vx = K.SPEED; p.dir=1; }
+  else p.vx *= 0.82;
 
   // jump
-  if (k.up && p.grounded) { p.vy = -520; p.grounded=false; beep(660); }
+  if (k.up && onGround(p)) { p.vy = -K.JUMP; beep(660); }
 
   // attack
-  if (k.attack && p.cooldown<=0) { p.anim="attack"; p.cooldown = .35; beep(880,.06,.04); }
-  if (p.cooldown>0) p.cooldown -= dt;
+  if (k.atk && p.atkLock<=0) { p.state="attack"; p.atkLock=0.35; beep(880,.06,.04); }
+  if (p.atkLock>0) p.atkLock-=dt;
 
   // integrate
-  p.x += p.vx*dt;
-  p.y += p.vy*dt;
+  p.x += p.vx*dt; p.y += p.vy*dt;
+  floorSnap(p);
 
-  // floor
-  if (p.y >= 420) { p.y = 420; p.vy = 0; p.grounded = true; }
-
-  // walls
-  p.x = Math.max(16, Math.min(p.x, canvas.width - p.w - 16));
-
-  // anim
-  if (p.anim !== "attack") {
-    if (!p.grounded) p.anim = "jump";
-    else if (Math.abs(p.vx)>20) p.anim="walk";
-    else p.anim="idle";
-  } else if (p.cooldown<=0) {
-    p.anim = "idle";
-  }
+  // state
+  if (p.atkLock>0) {/*stay attack*/}
+  else if (!onGround(p)) p.state="jump";
+  else if (Math.abs(p.vx)>20) p.state="walk";
+  else p.state="idle";
 
   // spawn enemies
-  const spawnGap = (state.mode === "endless") ? 850 : 1200;
-  if (now - state.lastSpawn > spawnGap) {
-    state.lastSpawn = now;
+  const gap = world.mode==="endless" ? 900 : 1400;
+  if (now - world.lastSpawn > gap) {
+    world.lastSpawn = now;
     const side = Math.random()<.5 ? -1 : 1;
-    state.enemies.push({
-      x: side<0 ? canvas.width-120 : 40, y: 420, w:64, h:64,
-      vx: side * 40, hp: 20, anim:"walk", hitlock:0
-    });
+    const e = makeEntity("ninja", world.sheets, side<0 ? canvas.width-120 : 40, world.groundY);
+    e.vx = side*60; e.state="walk";
+    world.enemies.push(e);
   }
 
-  // update enemies
-  state.enemies.forEach(e=>{
-    if (e.hitlock>0){ e.hitlock-=dt; e.anim="hurt"; return; }
-    e.x += e.vx*dt * (1+Math.random()*0.2);
-    if (Math.random()<0.01) e.vx*=-1;
+  // enemies AI + combat
+  for (const e of world.enemies){
+    if (e.inv>0) e.inv-=dt;
 
-    // simple chase
-    e.vx = Math.sign((p.x+32) - (e.x+32)) * 60;
+    // chase
+    e.vx = Math.sign((p.x) - (e.x)) * 80;
+    e.vy += K.GRAV * dt;
 
-    // collision with player (damage)
-    if (rectHit(e, p) && p.anim!=="attack"){
-      p.hp = Math.max(0, p.hp - 8);
-      document.getElementById("hpFill").style.width = `${p.hp}%`;
-      p.anim="hurt"; beep(220,.06,.05);
-      if (p.hp<=0){ endRound(false); }
+    // simple attack window
+    if (Math.abs(p.x - e.x) < 70 && onGround(e)){
+      e.state="attack";
+      if (e.inv<=0 && intersects(e,p) && p.atkLock<=0){
+        p.hp = Math.max(0, p.hp-8);
+        document.getElementById("hpFill").style.width = `${p.hp}%`;
+        beep(220,.06,.05);
+        if (p.hp<=0){ world.running=false; setPaused(true); }
+      }
+    } else {
+      e.state = Math.abs(e.vx)>10 ? "walk" : "idle";
     }
 
-    // player attack hits
-    if (p.anim==="attack" && rectHit({x:p.x + p.facing*30, y:p.y, w:50, h:40}, e)){
-      e.hp -= 10; e.hitlock=.2; beep(520,.05,.04);
-      if (e.hp<=0){ e.anim="death"; e.vx=0; state.score+=50; document.getElementById("scoreNum").textContent = state.score; }
+    // player hitbox during attack
+    if (p.state==="attack" && hitFrame("usagi","attack", current(p).frame)){
+      const inFront = p.dir===1 ? (e.x>p.x && e.x-p.x<80) : (e.x<p.x && p.x-e.x<80);
+      if (inFront && intersects(p,e)){
+        if (e.inv<=0){ e.hp-=10; e.inv=.2; beep(520,.05,.04); }
+      }
     }
 
-    // keep on floor
-    e.y=420;
-  });
+    e.x += e.vx*dt; e.y += e.vy*dt; floorSnap(e);
+  }
 
   // remove dead
-  state.enemies = state.enemies.filter(e=>!(e.anim==="death" && (e._deadTime=(e._deadTime||0)+dt)>0.4));
+  world.enemies = world.enemies.filter(e=>{
+    if (e.hp<=0){ world.score+=50; document.getElementById("scoreNum").textContent = world.score; return false; }
+    return true;
+  });
+
+  // update animations
+  current(p).update(dt);
+  for (const e of world.enemies) current(e).update(dt);
 }
 
-function endRound(win){
-  state.running=false;
-  setPaused(true);
+function hitFrame(who, state, frame){
+  const def = (who==="usagi"?AnimDefs.usagi:AnimDefs.ninja)[state];
+  return (def.hitFrames||[]).includes(frame);
 }
 
-function rectHit(a,b){
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
-
-function draw() {
-  // backdrop
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  drawBackdrop();
-  const p = state.player;
-
-  // player
-  if (p) drawSprite(p.x, p.y, p.anim, p.facing);
-
-  // enemies
-  state.enemies.forEach(e => drawSprite(e.x, e.y, e.anim, Math.sign(e.vx)||1));
-}
-
-function imgFor(anim, faction="usagi") {
-  const A = state.assets;
-  const key = `${faction}_${anim}`;
-  return A[key] || A[`${faction}_idle`];
-}
-
-function drawSprite(x,y,anim,facing){
-  const faction = (anim==="hurt"||anim==="death") ? "usagi" : undefined;
-  // Player uses 'usagi_*', enemies 'ninja_*'
-  let img;
-  if (faction) img = imgFor(anim,"usagi");
-  else img = state.assets[`ninja_${anim}`] ? undefined : null; // no-op
-
-  // Decide whether we’re drawing player or enemy by checking hit list in update()
-  // Safer approach: look up both
-  const pImg = imgFor(anim,"usagi");
-  const nImg = imgFor(anim,"ninja");
-
-  // If very near left/right we choose based on y baseline (hack: player y < enemy y usually equal)
-  // For clarity in this sample, we just draw both callers explicitly:
-  // Draw 'anim' for caller by width heuristic (player uses pImg when the function invoked for player)
-
-  ctx.save();
-  ctx.translate(x + 32, y + 32);
-  ctx.scale(facing<0 ? -1 : 1, 1);
-
-  // Choose image based on bounding box (player call passes anim for player; enemies handled in draw() above)
-  // We detect "is player" via presence in state.player position match:
-  if (Math.abs(state.player.x - x)<1 && Math.abs(state.player.y - y)<1) {
-    const imgP = pImg;
-    ctx.drawImage(imgP, -imgP.width/2, -imgP.height/2);
-  } else {
-    const imgN = nImg;
-    ctx.drawImage(imgN, -imgN.width/2, -imgN.height/2);
-  }
-
-  ctx.restore();
-}
-
-function drawBackdrop(){
-  // simple parallax stripes
-  const w = canvas.width, h = canvas.height;
-  const g = ctx.createLinearGradient(0, h*0.2, 0, h);
-  g.addColorStop(0, "#0b1324"); g.addColorStop(1, "#0a0f18");
-  ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
-
-  // floor line
-  ctx.fillStyle="#0e1726";
-  ctx.fillRect(0, 484, w, 4);
-  ctx.fillStyle="rgba(255,255,255,.04)";
-  for(let i=0;i<40;i++){
-    const x = (i*64 + (performance.now()/20)%64)%w;
-    ctx.fillRect(x, 490, 32, 3);
-  }
-}
+function onGround(e){ return e.y >= world.groundY; }
+function floorSnap(e){ if (e.y > world.groundY){ e.y = world.groundY; e.vy=0;
