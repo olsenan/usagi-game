@@ -6,7 +6,7 @@
 
     async loadJSON(path) {
       const res = await fetch(path);
-      if (!res.ok) throw new Error(`Failed to load ${path}`);
+      if (!res.ok) throw new Error(`Failed to load ${path}: ${res.status}`);
       return res.json();
     },
 
@@ -15,7 +15,7 @@
         if (this.images.has(path)) return resolve(this.images.get(path));
         const img = new Image();
         img.onload = () => { this.images.set(path, img); resolve(img); };
-        img.onerror = reject;
+        img.onerror = () => reject(new Error(`Image load failed: ${path}`));
         img.src = path;
       });
     },
@@ -29,32 +29,42 @@
       return el;
     },
 
-    async init() {
-      this.manifest = await this.loadJSON("./manifest/sprite_manifest.json");
+    _readInlineManifest() {
+      const tag = document.getElementById("manifest-inline");
+      if (!tag) return null;
+      try { return JSON.parse(tag.textContent); } catch { return null; }
+    },
 
-      // Preload character sheets
+    async init() {
+      // Try external manifest first; fall back to inline when file://
+      try {
+        this.manifest = await this.loadJSON("./manifest/sprite_manifest.json");
+      } catch (err) {
+        console.warn("Manifest fetch failed, using inline manifest. Error:", err);
+        const inline = this._readInlineManifest();
+        if (!inline) throw new Error("No manifest available (fetch failed and no inline manifest found).");
+        this.manifest = inline;
+      }
+
+      // Preload images
       const allPaths = [];
       for (const who of Object.values(this.manifest.characters)) {
         for (const anim of Object.values(who.animations)) {
           allPaths.push(anim.path);
         }
       }
-      // UI
-      for (const k of Object.keys(this.manifest.ui)) {
-        const p = this.manifest.ui[k];
-        if (typeof p === "string") allPaths.push(p);
+      for (const val of Object.values(this.manifest.ui || {})) {
+        if (typeof val === "string") allPaths.push(val);
       }
 
-      await Promise.all(allPaths.map(p => this.loadImage(p)));
+      await Promise.all(allPaths.map(p =>
+        this.loadImage(p).catch(err => console.warn(String(err)))
+      ));
 
       // Audio
       const { audio } = this.manifest;
       if (audio?.bgm) this.loadAudio(audio.bgm, audio.bgmVolume ?? 0.5);
-      if (audio?.sfx) {
-        for (const [k, p] of Object.entries(audio.sfx)) {
-          this.loadAudio(p, audio.sfxVolume ?? 0.8);
-        }
-      }
+      if (audio?.sfx) for (const p of Object.values(audio.sfx)) this.loadAudio(p, audio.sfxVolume ?? 0.8);
     }
   };
 
