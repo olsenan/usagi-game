@@ -20,15 +20,11 @@ body{
   box-shadow:0 6px 20px rgba(0,0,0,.4);
 }
 #ui button:hover{ outline:1px solid var(--accent); color:white; }
-#title{text-align:center; background:rgba(5,7,10,.6); padding:2rem 2.5rem; border-radius:16px; backdrop-filter: blur(6px); }
-#title h1{ margin:.2rem 0 1rem; letter-spacing:.5px; font-size:2rem; }
+.panel{text-align:center; background:rgba(5,7,10,.6); padding:2rem 2.5rem; border-radius:16px; backdrop-filter: blur(6px); }
+.panel h1{ margin:.2rem 0 1rem; letter-spacing:.5px; font-size:2rem; }
 .credit{ opacity:.7; font-size:.9rem; margin-top:.75rem }
 
 .hidden{ display:none }
-
-#paused{
-  background:rgba(5,7,10,.7); padding:1.25rem 1.5rem; border-radius:14px; text-align:center;
-}
 
 #hud{ position:fixed; top:16px; left:50%; transform: translateX(-50%);
   width:920px; display:flex; gap:12px; align-items:center; justify-content:space-between;
