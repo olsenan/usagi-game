@@ -18,8 +18,17 @@ export function bootUI(actions = {}) {
 
   const $ = (sel) => document.querySelector(sel);
   window.__UI = {
-    showTitle(show=true){ const el=$("#title")||$("#title-screen"); if (el) el.classList.toggle("hidden", !show); el?.classList.toggle("visible", show); },
-    showPaused(show=true){ const el=$("#paused")||$("#pause-screen"); if (el) el.classList.toggle("hidden", !show); el?.classList.toggle("visible", show); },
-    showHUD(show=true){ const el=$("#hud"); if (el) el.classList.toggle("hidden", !show); }
+    showTitle(show=true){
+      const el = $("#title") || $("#title-screen");
+      if (el) { el.classList.toggle("hidden", !show); el.classList.toggle("visible", show); }
+    },
+    showPaused(show=true){
+      const el = $("#paused") || $("#pause-screen");
+      if (el) { el.classList.toggle("hidden", !show); el.classList.toggle("visible", show); }
+    },
+    showHUD(show=true){
+      const el = $("#hud");
+      if (el) el.classList.toggle("hidden", !show);
+    }
   };
 }
