@@ -1,3 +1,2 @@
 // scripts/main.js
-// Keep this minimal: the game wires itself via bootUI imports.
-import "./game.js";
+import "./game.v3.js";
