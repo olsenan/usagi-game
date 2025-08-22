@@ -6,7 +6,7 @@
   <base href="./" />
   <title>Usagi Arcade Brawler</title>
   <link rel="stylesheet" href="styles.css" />
-  <!-- inline favicon: tiny bunny -->
+  <!-- inline favicon (stops 404) -->
   <link rel="icon" href="data:image/svg+xml;utf8,
     <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
       <rect width='64' height='64' rx='12' fill='%230b1220'/>
@@ -33,3 +33,16 @@
       <button id="btnResume">Resume</button>
       <button id="btnQuit">Quit</button>
     </div>
+
+    <div id="hud" class="hidden">
+      <div id="health"><span id="hpFill"></span></div>
+      <div id="score">Score: <b id="scoreNum">0</b></div>
+    </div>
+  </div>
+
+  <canvas id="game" width="960" height="540"></canvas>
+
+  <!-- cache-busted module -->
+  <script type="module" src="scripts/main.js?v=4"></script>
+</body>
+</html>
