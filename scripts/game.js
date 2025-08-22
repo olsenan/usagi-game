@@ -1,6 +1,5 @@
 (function () {
   // ---------- Helpers ----------
-  const lerp = (a,b,t)=> a+(b-a)*t;
   const clamp = (v,lo,hi)=> Math.max(lo, Math.min(hi, v));
   const now = ()=> performance.now();
 
@@ -9,7 +8,6 @@
       this.left = this.right = this.up = this.down = false;
       this.attack = false;
       this.pause = false;
-
       this.#bindKeys();
       this.#bindPointer(canvas);
     }
@@ -26,7 +24,6 @@
       window.addEventListener("keyup",   e => on(e, false));
     }
     #bindPointer(canvas) {
-      // Simple tap-to-attack on mobile; swipe left/right to move.
       let startX = null;
       canvas.addEventListener("pointerdown", (e) => {
         startX = e.clientX;
@@ -49,7 +46,7 @@
   class AnimatedSprite {
     constructor(image, frames, fps, loop) {
       this.img = image;
-      this.frames = frames;
+      this.frames = Math.max(1, frames|0);
       this.fps = fps;
       this.loop = loop;
       this.time = 0;
@@ -59,13 +56,17 @@
       this.time += dt;
       const total = this.frames;
       const frameF = (this.time * this.fps);
-      if (this.loop) {
-        this.frame = Math.floor(frameF) % total;
-      } else {
-        this.frame = Math.min(total - 1, Math.floor(frameF));
-      }
+      if (this.loop) this.frame = Math.floor(frameF) % total;
+      else this.frame = Math.min(total - 1, Math.floor(frameF));
     }
     reset() { this.time = 0; this.frame = 0; }
+  }
+
+  // 1x1 transparent fallback image (if some sheets are missing)
+  function emptyImage() {
+    const c = document.createElement("canvas");
+    c.width = c.height = 1;
+    return c;
   }
 
   class Entity {
@@ -95,15 +96,9 @@
         anim.reset();
       }
     }
-
     currentAnim() { return this.anims.get(this.state); }
-
-    applyGravity(dt, gravity) {
-      this.vy += gravity * dt;
-    }
-
+    applyGravity(dt, gravity) { this.vy += gravity * dt; }
     get groundY() { return window.Loader.manifest.meta.groundY; }
-
     onGround() { return this.y >= this.groundY; }
 
     bbox() {
@@ -112,11 +107,31 @@
       const fy = this.y - hb.y - hb.h;
       return { x: fx, y: fy, w: hb.w, h: hb.h };
     }
-
     intersects(other) {
       const a = this.bbox(), b = other.bbox();
       return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
     }
+  }
+
+  function buildAnims(cfg, assets) {
+    const frameW = window.Loader.manifest.meta.frameWidth;
+    const fallbackPath = cfg.animations.idle?.path ?? Object.values(cfg.animations)[0]?.path;
+    const fallbackImg = assets.get(fallbackPath) || emptyImage();
+
+    const map = new Map();
+    for (const [state, meta] of Object.entries(cfg.animations)) {
+      let img = assets.get(meta.path);
+      if (!img) img = fallbackImg;
+
+      // If we don’t know frame count for fallback, derive from image width
+      let frames = meta.frames;
+      if (!assets.get(meta.path)) {
+        const w = img.width || frameW;
+        frames = Math.max(1, Math.floor(w / frameW));
+      }
+      map.set(state, new AnimatedSprite(img, frames, meta.fps, meta.loop));
+    }
+    return map;
   }
 
   class Player extends Entity {
@@ -124,60 +139,46 @@
       super("player", cfg);
       this.score = 0;
       this.combo = 0;
-      this.loadAnims(cfg, assets);
+      this.anims = buildAnims(cfg, assets);
     }
-    loadAnims(cfg, assets) {
-      for (const [state, meta] of Object.entries(cfg.animations)) {
-        const img = assets.get(meta.path);
-        this.anims.set(state, new AnimatedSprite(img, meta.frames, meta.fps, meta.loop));
-      }
-    }
+
     update(dt, input) {
       const g = this.cfg.gravity;
       // Horizontal
       const move = (input.right ? 1 : 0) - (input.left ? 1 : 0);
       this.vx = move * this.cfg.speed;
-
       if (move !== 0) this.dir = (move >= 0 ? 1 : -1);
 
       // Attack
       if (input.attack && this.attackTimer <= 0 && !this.dead) {
         this.setAnimation("attack");
-        this.attackTimer = 0.45; // locked in attack
-        if (window.SFX("attack")) window.SFX("attack").currentTime = 0, window.SFX("attack").play();
+        this.attackTimer = 0.45;
+        const s = window.SFX("attack"); if (s) s.currentTime = 0, s.play();
       }
 
       // Jump
       if (input.up && this.onGround() && !this.dead && this.attackTimer <= 0) {
         this.vy = this.cfg.jumpVelocity;
         this.setAnimation("jump");
-        if (window.SFX("jump")) window.SFX("jump").currentTime = 0, window.SFX("jump").play();
+        const s = window.SFX("jump"); if (s) s.currentTime = 0, s.play();
       }
 
       // Physics
       this.applyGravity(dt, g);
       this.x += this.vx * dt;
       this.y += this.vy * dt;
-
       if (this.y > this.groundY) { this.y = this.groundY; this.vy = 0; }
 
       // State transitions
-      if (this.dead) {
-        this.setAnimation("death");
-      } else if (this.attackTimer > 0) {
-        // remain in attack animation
-      } else if (!this.onGround()) {
-        this.setAnimation("jump");
-      } else if (Math.abs(this.vx) > 1) {
-        this.setAnimation("walk");
-      } else {
-        this.setAnimation("idle");
-      }
+      if (this.dead) this.setAnimation("death");
+      else if (this.attackTimer > 0) { /* stay in attack */ }
+      else if (!this.onGround()) this.setAnimation("jump");
+      else if (Math.abs(this.vx) > 1) this.setAnimation("walk");
+      else this.setAnimation("idle");
 
       if (this.attackTimer > 0) this.attackTimer -= dt;
       if (this.invuln > 0) this.invuln -= dt;
 
-      // Update anim
       const anim = this.currentAnim();
       if (anim) anim.update(dt);
     }
@@ -187,24 +188,16 @@
       this.hp -= dmg;
       this.invuln = 0.5;
       this.setAnimation(this.hp > 0 ? "hurt" : "death");
-      if (this.hp <= 0) {
-        this.dead = true;
-        if (window.SFX("death")) window.SFX("death").play();
-      } else if (window.SFX("hit")) window.SFX("hit").play();
+      if (this.hp <= 0) { this.dead = true; const s = window.SFX("death"); if (s) s.play(); }
+      else { const s = window.SFX("hit"); if (s) s.play(); }
     }
   }
 
   class Enemy extends Entity {
     constructor(type, cfg, assets, x) {
       super(type, cfg);
-      this.loadAnims(cfg, assets);
+      this.anims = buildAnims(cfg, assets);
       this.x = x;
-    }
-    loadAnims(cfg, assets) {
-      for (const [state, meta] of Object.entries(cfg.animations)) {
-        const img = assets.get(meta.path);
-        this.anims.set(state, new AnimatedSprite(img, meta.frames, meta.fps, meta.loop));
-      }
     }
     update(dt, player) {
       if (this.dead) { this.setAnimation("death"); this.applyGravity(dt, this.cfg.gravity); this.y += this.vy * dt; return; }
@@ -222,12 +215,10 @@
           if (this.attackTimer <= 0) {
             this.setAnimation("attack");
             this.attackTimer = ai.attackCooldown;
-            if (window.SFX("attack")) window.SFX("attack").currentTime = 0, window.SFX("attack").play();
+            const s = window.SFX("attack"); if (s) s.currentTime = 0, s.play();
           }
         }
-      } else {
-        this.vx = 0; this.setAnimation("idle");
-      }
+      } else { this.vx = 0; this.setAnimation("idle"); }
 
       this.applyGravity(dt, this.cfg.gravity);
       this.x += this.vx * dt;
@@ -255,18 +246,15 @@
     constructor(modeCfg) {
       this.mode = modeCfg;
       this.timer = 0;
-      this.waveIndex = 0;
-      this.active = "challenge" in modeCfg ? "challenge" : "story";
     }
     update(dt, game) {
-      if (this.active === "story") return; // basic waves could be triggered externally
+      const cfg = this.mode.challenge;
+      if (!cfg) return;
       this.timer -= dt;
       if (this.timer <= 0) {
-        const sec = this.mode.challenge.spawnEverySec;
-        const scale = this.mode.challenge.spawnScale;
-        const count = 1 + Math.floor(game.elapsed / 10 * scale);
-        this.spawnEnemies(game, count);
-        this.timer = sec;
+        const count = 1 + Math.floor(game.elapsed / 10 * (cfg.spawnScale || 0));
+        this.spawnEnemies(game, Math.max(1, count));
+        this.timer = cfg.spawnEverySec || 3;
       }
     }
     spawnEnemies(game, count) {
@@ -294,8 +282,8 @@
 
       this.player = null;
       this.entities = [];
-      this.mode = "story"; // or "challenge"
-      this.spawner = new Spawner(this.manifest.modes);
+      this.mode = "story";
+      this.spawner = new Spawner(this.manifest.modes || {});
 
       this.last = now();
       this.running = false;
@@ -321,7 +309,6 @@
       this.player.hp = 100; this.player.maxHp = 100;
       this.entities.push(this.player);
 
-      // Start a few ninjas for story mode
       if (this.mode === "story") {
         [this.width * 0.7, this.width * 0.9].forEach(x => this.spawnEnemy("ninja", x));
       }
@@ -339,8 +326,8 @@
 
     loop() {
       if (!this.running) return;
-      const t = now();
-      const dt = Math.min(0.033, (t - this.last) / 1000); // clamp dt
+      const t = performance.now();
+      const dt = Math.min(0.033, (t - this.last) / 1000);
       this.last = t;
       this.elapsed += dt;
 
@@ -351,26 +338,21 @@
     }
 
     update(dt) {
-      // Pause toggle
       if (this.input.pause) {
         this.input.pause = false;
         this.pause();
         return;
       }
 
-      // Spawner (challenge)
       if (this.mode === "challenge") this.spawner.update(dt, this);
 
-      // Update entities
       for (const e of this.entities) {
         if (e === this.player) e.update(dt, this.input);
         else e.update(dt, this.player);
       }
 
-      // Combat windows (hit frames)
       this.handleCombat();
 
-      // Cull dead enemies after death anim finishes
       this.entities = this.entities.filter(e => !(e.dead && e !== this.player && e.currentAnim()?.frame >= (e.currentAnim()?.frames - 1)));
       if (this.player.dead && this.player.currentAnim()?.frame >= (this.player.currentAnim()?.frames - 1)) {
         this.gameOver();
@@ -386,27 +368,23 @@
       if (isHitFrame) {
         for (const e of this.entities) {
           if (e === p || e.dead) continue;
-          // Simple "attack range" in front of player
           const range = 70;
           const dx = e.x - p.x;
           const facingOK = (p.dir === 1 && dx > -10 && dx < range) || (p.dir === -1 && dx < 10 && dx > -range);
           if (facingOK && Math.abs(e.y - p.y) < 30) {
             const killed = e.takeDamage(25);
-            if (killed) p.score += 100; else p.score += 10;
+            p.score += killed ? 100 : 10;
           }
         }
       }
 
-      // Enemy attack windows
       for (const e of this.entities) {
         if (e === p || e.dead) continue;
         const cfg = this.manifest.characters[e.kind].animations.attack;
         if (!cfg) continue;
         const a = e.currentAnim();
         const eHit = e.state === "attack" && (cfg.hitFrames || [2]).includes(a.frame);
-        if (eHit && e.intersects(p)) {
-          p.takeDamage(10);
-        }
+        if (eHit && e.intersects(p)) p.takeDamage(10);
       }
     }
 
@@ -414,12 +392,10 @@
       const ctx = this.ctx;
       ctx.clearRect(0, 0, this.width, this.height);
 
-      // Parallax-ish flat background (placeholder color bands behind your level art)
+      // Simple background + ground line
       const h = this.height;
       ctx.fillStyle = "#0c1020"; ctx.fillRect(0, 0, this.width, h);
       ctx.fillStyle = "#121a32"; ctx.fillRect(0, h*0.55, this.width, h*0.45);
-
-      // Ground line
       ctx.strokeStyle = "rgba(255,255,255,.08)";
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -430,10 +406,10 @@
       // Entities
       for (const e of this.entities) {
         const anim = e.currentAnim();
-        if (!anim) continue;
+        if (!anim || !anim.img) continue;
         const frameW = this.manifest.meta.frameWidth;
         const frameH = this.manifest.meta.frameHeight;
-        const sx = anim.frame * frameW;
+        const sx = Math.min(anim.frame, anim.frames - 1) * frameW;
         const sy = 0;
         const scale = this.scale;
 
@@ -447,14 +423,8 @@
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(anim.img, sx, sy, frameW, frameH, 0, 0, Math.round(frameW * scale), Math.round(frameH * scale));
         ctx.restore();
-
-        // Debug: bounding boxes (toggle if needed)
-        // ctx.strokeStyle = "rgba(255,0,0,.4)";
-        // const hb = e.bbox();
-        // ctx.strokeRect(hb.x, hb.y, hb.w, hb.h);
       }
 
-      // UI: HP + Score
       this.drawHUD(ctx);
     }
 
@@ -465,14 +435,12 @@
       ctx.fillStyle = "rgba(0,0,0,.35)";
       ctx.fillRect(x - 4, y - 4, barW + 8, barH + 8);
 
-      // health bar
       const hpPct = clamp(p.hp / p.maxHp, 0, 1);
       ctx.fillStyle = "#2c3748"; ctx.fillRect(x, y, barW, barH);
       ctx.fillStyle = "#43e97b"; ctx.fillRect(x, y, barW * hpPct, barH);
       ctx.strokeStyle = "rgba(255,255,255,.2)";
       ctx.strokeRect(x, y, barW, barH);
 
-      // score
       ctx.fillStyle = "rgba(255,255,255,.9)";
       ctx.font = "16px monospace";
       ctx.fillText(`Score: ${p.score}`, x, y + barH + 22);
@@ -524,7 +492,6 @@
     }
 
     #resize() {
-      // Keep aspect ~16:9 while fitting container
       const root = this.canvas.parentElement;
       const maxW = Math.min(root.clientWidth, 960);
       const aspect = 16/9;
@@ -532,13 +499,11 @@
       const h = Math.round(w / aspect);
       this.canvas.style.width = `${w}px`;
       this.canvas.style.height = `${h}px`;
-      // Internal buffer fixed for consistent physics; render uses CSS scaling.
       this.width = this.canvas.width;
       this.height = this.canvas.height;
     }
   }
 
-  // SFX helper
   window.SFX = function (name) {
     const p = Loader.manifest.audio?.sfx?.[name];
     return p ? Loader.audio.get(p) : null;
