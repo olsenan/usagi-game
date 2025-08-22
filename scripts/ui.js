@@ -52,11 +52,8 @@
   const UIStorage = {
     KEY: "usagi_hiscores_v1",
     getScores() {
-      try {
-        return JSON.parse(localStorage.getItem(this.KEY)) ?? [];
-      } catch {
-        return [];
-      }
+      try { return JSON.parse(localStorage.getItem(this.KEY)) ?? []; }
+      catch { return []; }
     },
     saveScore(initials, score) {
       const scores = this.getScores();
