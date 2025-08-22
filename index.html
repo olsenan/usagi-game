@@ -1,31 +1,29 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Usagi Arcade Brawler – Debug Build</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8">
+  <title>Usagi Arcade Brawler</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Game container handles letterboxing & safe pixel scaling -->
-  <div id="game-root">
-    <canvas id="game"></canvas>
-
-    <!-- On-screen controls (mobile friendly) -->
-    <div id="hud">
-      <div class="pad">
-        <button id="btn-left" aria-label="Left">◀</button>
-        <button id="btn-right" aria-label="Right">▶</button>
-      </div>
-      <div class="pad">
-        <button id="btn-jump" aria-label="Jump">J</button>
-        <button id="btn-attack" aria-label="Attack">A</button>
-      </div>
-    </div>
-
-    <!-- Small build/debug overlay -->
-    <div id="overlay" class="mono"></div>
+  <!-- Title Screen -->
+  <div id="title-screen" class="screen">
+    <h1>Usagi Arcade Brawler</h1>
+    <button id="start-button">Start</button>
   </div>
 
-  <script src="fullgame.js"></script>
+  <!-- Game Canvas -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Touch Controls -->
+  <div id="controls">
+    <button id="left-btn">⬅</button>
+    <button id="right-btn">➡</button>
+    <button id="jump-btn">⤴</button>
+    <button id="attack-btn">⚔</button>
+  </div>
+
+  <script src="game.js"></script>
 </body>
 </html>
