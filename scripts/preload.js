@@ -1,72 +1,70 @@
-(function () {
-  const Loader = {
-    manifest: null,
-    images: new Map(),
-    audio: new Map(),
+// scripts/preload.js
+// Preload images & audio with clear errors and Pages-safe URLs.
 
-    async loadJSON(path) {
-      const res = await fetch(path);
-      if (!res.ok) throw new Error(`Failed to load ${path}: ${res.status}`);
-      return res.json();
-    },
+export const Assets = {
+  images: {
+    // UI
+    ui_start: "assets/ui/start_button.png",
+    ui_health: "assets/ui/health_bar.png",
+    ui_pause: "assets/ui/pause_icon.png",
 
-    loadImage(path) {
-      return new Promise((resolve, reject) => {
-        if (this.images.has(path)) return resolve(this.images.get(path));
-        const img = new Image();
-        img.onload = () => { this.images.set(path, img); resolve(img); };
-        img.onerror = () => reject(new Error(`Image load failed: ${path}`));
-        img.src = path;
-      });
-    },
+    // Player
+    usagi_idle:  "assets/sprites/usagi/idle.png",
+    usagi_walk:  "assets/sprites/usagi/walk.png",
+    usagi_attack:"assets/sprites/usagi/attack.png",
+    usagi_jump:  "assets/sprites/usagi/jump.png",
+    usagi_hurt:  "assets/sprites/usagi/hurt.png",
+    usagi_death: "assets/sprites/usagi/death.png",
 
-    loadAudio(path, volume = 1) {
-      if (this.audio.has(path)) return this.audio.get(path);
-      const el = new Audio(path);
-      el.preload = "auto";
-      el.volume = volume;
-      this.audio.set(path, el);
-      return el;
-    },
+    // Enemy
+    ninja_idle:  "assets/sprites/ninja/idle.png",
+    ninja_walk:  "assets/sprites/ninja/walk.png",
+    ninja_attack:"assets/sprites/ninja/attack.png",
+    ninja_jump:  "assets/sprites/ninja/jump.png",
+    ninja_hurt:  "assets/sprites/ninja/hurt.png",
+    ninja_death: "assets/sprites/ninja/death.png",
+  },
+  audio: {
+    bgm_level1: "assets/audio/bgm_level1.ogg",
+    sfx_attack: "assets/audio/attack.wav",
+    sfx_hit:    "assets/audio/hit.wav",
+    sfx_jump:   "assets/audio/jump.wav",
+    sfx_death:  "assets/audio/death.wav",
+  }
+};
 
-    _readInlineManifest() {
-      const tag = document.getElementById("manifest-inline");
-      if (!tag) return null;
-      try { return JSON.parse(tag.textContent); } catch { return null; }
-    },
+function toURL(path) {
+  // Construct a URL relative to the current page (Pages-safe, no leading slash).
+  return new URL(path, document.baseURI).toString();
+}
 
-    async init() {
-      // Try external manifest first; fall back to inline when file://
-      try {
-        this.manifest = await this.loadJSON("./manifest/sprite_manifest.json");
-      } catch (err) {
-        console.warn("Manifest fetch failed, using inline manifest. Error:", err);
-        const inline = this._readInlineManifest();
-        if (!inline) throw new Error("No manifest available (fetch failed and no inline manifest found).");
-        this.manifest = inline;
-      }
+export async function preloadAll() {
+  const imagePromises = Object.entries(Assets.images).map(([key, rel]) =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve([key, img]);
+      img.onerror = () => reject(new Error(`Image load failed: ${rel}`));
+      img.src = toURL(rel);
+    })
+  );
 
-      // Preload images
-      const allPaths = [];
-      for (const who of Object.values(this.manifest.characters)) {
-        for (const anim of Object.values(who.animations)) {
-          allPaths.push(anim.path);
-        }
-      }
-      for (const val of Object.values(this.manifest.ui || {})) {
-        if (typeof val === "string") allPaths.push(val);
-      }
+  const audioPromises = Object.entries(Assets.audio).map(([key, rel]) =>
+    new Promise((resolve, reject) => {
+      const audio = new Audio();
+      const onCanPlay = () => { cleanup(); resolve([key, audio]); };
+      const onError = () => { cleanup(); reject(new Error(`Audio load failed: ${rel}`)); };
+      const cleanup = () => {
+        audio.removeEventListener("canplaythrough", onCanPlay);
+        audio.removeEventListener("error", onError);
+      };
+      audio.addEventListener("canplaythrough", onCanPlay, { once: true });
+      audio.addEventListener("error", onError, { once: true });
+      audio.src = toURL(rel);
+      audio.load();
+    })
+  );
 
-      await Promise.all(allPaths.map(p =>
-        this.loadImage(p).catch(err => console.warn(String(err)))
-      ));
-
-      // Audio
-      const { audio } = this.manifest;
-      if (audio?.bgm) this.loadAudio(audio.bgm, audio.bgmVolume ?? 0.5);
-      if (audio?.sfx) for (const p of Object.values(audio.sfx)) this.loadAudio(p, audio.sfxVolume ?? 0.8);
-    }
-  };
-
-  window.Loader = Loader;
-})();
+  const entries = await Promise.all([...imagePromises, ...audioPromises]);
+  const cache = Object.fromEntries(entries);
+  return cache;
+}
