@@ -1,6 +1,4 @@
-// scripts/preload.js
-// Loads sprite sheets if present, otherwise uses placeholders.
-
+// Loads sprite sheets or generates safe placeholders if files are missing.
 const FRAME_W = 96, FRAME_H = 96;
 
 export const AnimDefs = {
