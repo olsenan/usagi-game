@@ -2,8 +2,11 @@
   --bg:#0b1220; --panel:rgba(5,7,10,.65); --accent:#22d3ee; --ink:#e5e7eb;
 }
 *{box-sizing:border-box}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--ink)}
-canvas{position:fixed;inset:0;margin:auto;max-width:100vw;max-height:100vh;outline:none;image-rendering:pixelated}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink); overscroll-behavior:none}
+canvas{
+  position:fixed; inset:0; margin:auto; max-width:100vw; max-height:100vh; outline:none; image-rendering:pixelated;
+  z-index:0; touch-action:none; -webkit-user-select:none; user-select:none;
+}
 
 #ui{ z-index:10; position:fixed; inset:0; pointer-events:none; display:grid; place-items:center; padding:16px; }
 .panel{ background:var(--panel); padding:24px 28px; border-radius:16px; backdrop-filter: blur(6px); text-align:center; }
@@ -37,9 +40,10 @@ canvas{position:fixed;inset:0;margin:auto;max-width:100vw;max-height:100vh;outli
   border:1px solid #111827; color:#e5e7eb; font-weight:800; font-size:20px;
   box-shadow:0 6px 20px rgba(0,0,0,.35);
   display:flex; align-items:center; justify-content:center;
+  -webkit-user-select:none; user-select:none; touch-action:none;
 }
 #touch .tc-btn:active{ outline:2px solid var(--accent); color:#fff; }
 @media (min-width: 920px){
-  /* Hide touch on big desktops if you want */
+  /* Optionally hide touch controls on large displays */
   /* #touch { display:none; } */
 }
