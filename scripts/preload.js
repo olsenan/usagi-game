@@ -1,5 +1,5 @@
 // scripts/preload.js
-// No fetch. Loads expected sprite sheets if present, otherwise uses placeholders.
+// Loads sprite sheets if present, otherwise uses placeholders.
 
 const FRAME_W = 96, FRAME_H = 96;
 
@@ -16,7 +16,7 @@ export const AnimDefs = {
   ninja: {
     idle:   { path: "assets/sprites/ninja/idle.png",   frames: 4, fps: 8,  loop: true },
     walk:   { path: "assets/sprites/ninja/walk.png",   frames: 8, fps: 12, loop: true },
-    attack: { path: "assets/sprites/ninja/attack.png", frames: 6, fps: 14, loop: false, hitFrames: [2,3] },
+    attack: { path: "assets/sprites/ninja/attack.png", frames: 6, fps: 16, loop: false, hitFrames: [2,3] },
     jump:   { path: "assets/sprites/ninja/jump.png",   frames: 4, fps: 9,  loop: false },
     hurt:   { path: "assets/sprites/ninja/hurt.png",   frames: 4, fps: 10, loop: false },
     death:  { path: "assets/sprites/ninja/death.png",  frames: 6, fps: 8,  loop: false }
@@ -29,7 +29,8 @@ function placeholder(label, w=FRAME_W, h=FRAME_H){
   const g = c.getContext("2d");
   g.fillStyle = "#0b1220"; g.fillRect(0,0,w,h);
   g.strokeStyle = "#ef4444"; g.strokeRect(1,1,w-2,h-2);
-  g.fillStyle="#ef4444"; g.font="12px monospace"; g.textAlign="center"; g.fillText(label, w/2, h/2);
+  g.fillStyle="#ef4444"; g.font="12px monospace"; g.textAlign="center";
+  g.fillText(label, w/2, h/2);
   return c;
 }
 
@@ -38,7 +39,7 @@ function loadImage(path){
     const img = new Image();
     img.onload = ()=> resolve(img);
     img.onerror = ()=> reject(new Error("404 "+path));
-    img.src = path; // relative (Pages-safe)
+    img.src = path;
   });
 }
 
@@ -53,7 +54,9 @@ export async function loadSheets(){
         cache[who][state] = { img, ...meta };
       } catch (e) {
         console.warn("Missing sprite, using placeholder:", meta.path);
-        cache[who][state] = { img: placeholder(`${who}:${state}`), frames: 1, fps: meta.fps, loop: meta.loop, hitFrames: meta.hitFrames||[] };
+        const frames = meta.frames || 1;
+        const pimg = placeholder(`${who}:${state}`, FRAME_W*frames, FRAME_H);
+        cache[who][state] = { img: pimg, frames, fps: meta.fps, loop: meta.loop, hitFrames: meta.hitFrames||[] };
       }
     }
   }
