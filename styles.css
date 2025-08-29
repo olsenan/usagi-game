@@ -12,8 +12,7 @@ body{
 }
 
 #game{ display:block; border-radius:16px; box-shadow:0 20px 80px rgba(0,0,0,.6); outline:2px solid #111; background:#0a0f18; }
-
-#ui{ position:fixed; inset:0; pointer-events:none; display:grid; place-items:center; }
+#ui{ z-index:10; position:fixed; inset:0; pointer-events:none; display:grid; place-items:center; }
 #ui button{ pointer-events:auto; cursor:pointer; font-weight:700;
   background:linear-gradient(180deg, #1f2937, #0f172a);
   color:#e5e7eb; border:1px solid #111827; padding:.75rem 1.25rem; border-radius:12px;
@@ -21,8 +20,7 @@ body{
 }
 #ui button:hover{ outline:1px solid var(--accent); color:white; }
 .panel{text-align:center; background:rgba(5,7,10,.6); padding:2rem 2.5rem; border-radius:16px; backdrop-filter: blur(6px); }
-.panel h1{ margin:.2rem 0 1rem; letter-spacing:.5px; font-size:2rem; }
-.credit{ opacity:.7; font-size:.9rem; margin-top:.75rem }
+.hidden{ display:none }
 
 .hidden{ display:none }
 
