@@ -1,9 +1,4 @@
 // scripts/touch.js
-// Minimal on-screen controls for mobile: left, right, attack, pause.
-// Usage from main.js:
-//   import { attachTouch } from './touch.js';
-//   attachTouch({ pressLeft, releaseLeft, pressRight, releaseRight, pressAttack, releaseAttack, togglePause });
-
 function makeButton(label, id){
   const b = document.createElement('button');
   b.textContent = label;
@@ -13,48 +8,37 @@ function makeButton(label, id){
   b.setAttribute('aria-label', label);
   return b;
 }
-
 function onPress(el, down, up){
   const downEv = e => { e.preventDefault(); down(); };
   const upEv   = e => { e.preventDefault(); up(); };
   el.addEventListener('pointerdown', downEv);
   el.addEventListener('pointerup', upEv);
+  el.addEventListener('pointercancel', upEv);
   el.addEventListener('pointerleave', upEv);
+  // Also accept touch for older browsers (still preventDefault to stop scrolling)
   el.addEventListener('touchstart', downEv, { passive:false });
   el.addEventListener('touchend', upEv);
   el.addEventListener('touchcancel', upEv);
 }
-
 export function attachTouch(api){
-  // Guard: if already attached, do nothing.
   if(document.getElementById('touch')) return;
-
   const wrap = document.createElement('div');
   wrap.id = 'touch';
-  wrap.innerHTML = `
-    <div class="tc-left">
-      <!-- left side -->
-    </div>
-    <div class="tc-right">
-      <!-- right side -->
-    </div>
-  `;
+  wrap.innerHTML = `<div class="tc-left"></div><div class="tc-right"></div>`;
   document.body.appendChild(wrap);
-
   const leftBtn  = makeButton('◀', 'btnLeft');
   const rightBtn = makeButton('▶', 'btnRight');
   const atkBtn   = makeButton('斬', 'btnAttack');
   const pauseBtn = makeButton('II', 'btnPause');
-
   wrap.querySelector('.tc-left').append(leftBtn, rightBtn);
   wrap.querySelector('.tc-right').append(atkBtn, pauseBtn);
-
-  // Wire events
   onPress(leftBtn,  api.pressLeft,  api.releaseLeft);
   onPress(rightBtn, api.pressRight, api.releaseRight);
   onPress(atkBtn,   api.pressAttack, api.releaseAttack);
   pauseBtn.addEventListener('click', e=>{ e.preventDefault(); api.togglePause(); });
-
-  // Disable scrolling/gesture on the overlay
+  // Disable gestures on the whole overlay
   wrap.style.touchAction = 'none';
+  wrap.addEventListener('gesturestart', e=>e.preventDefault());
+  wrap.addEventListener('gesturechange', e=>e.preventDefault());
+  wrap.addEventListener('gestureend', e=>e.preventDefault());
 }
