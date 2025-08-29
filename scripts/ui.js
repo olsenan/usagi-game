@@ -1,34 +1,30 @@
-// scripts/ui.js
-// Event delegation so we never touch null elements; supports kebab/camel IDs.
+// Simple UI state helpers and bindings
+const $ = sel => document.querySelector(sel);
+const show = el => el.classList.add('visible');
+const hide = el => el.classList.remove('visible');
+const hideEl = el => el.classList.add('hidden');
+const showEl = el => el.classList.remove('hidden');
 
-export function bootUI(actions = {}) {
-  const map = {
-    "btnStart": "start", "btn-start": "start",
-    "btnEndless": "endless", "btn-challenge": "endless",
-    "btnResume": "resume", "btn-resume": "resume",
-    "btnQuit": "quit", "btn-quit": "quit"
-  };
+export function bindUI({ onStart, onEndless, onResume, onQuit }){
+  $('#btnStart')  .addEventListener('click', onStart);
+  $('#btnEndless').addEventListener('click', onEndless);
+  $('#btnResume') .addEventListener('click', onResume);
+  $('#btnQuit')   .addEventListener('click', onQuit);
+}
 
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
-    const act = map[btn.id];
-    if (act && typeof actions[act] === "function") actions[act]();
-  });
+export function showTitle(){
+  show($('#title')); hide($('#paused')); hideEl($('#hud'));
+}
+export function showHUD(){
+  hide($('#title')); hide($('#paused')); showEl($('#hud'));
+}
+export function showPaused(){
+  hide($('#title')); show($('#paused')); showEl($('#hud'));
+}
 
-  const $ = (sel) => document.querySelector(sel);
-  window.__UI = {
-    showTitle(show=true){
-      const el = $("#title") || $("#title-screen");
-      if (el) { el.classList.toggle("hidden", !show); el.classList.toggle("visible", show); }
-    },
-    showPaused(show=true){
-      const el = $("#paused") || $("#pause-screen");
-      if (el) { el.classList.toggle("hidden", !show); el.classList.toggle("visible", show); }
-    },
-    showHUD(show=true){
-      const el = $("#hud");
-      if (el) el.classList.toggle("hidden", !show);
-    }
-  };
+export function setHealth(pct){
+  $('#hpFill').style.width = Math.max(0, Math.min(100, pct)) + '%';
+}
+export function setScore(n){
+  $('#scoreNum').textContent = String(n|0);
 }
