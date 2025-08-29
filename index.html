@@ -2,46 +2,68 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
-  <base href="./" />
   <title>Usagi Arcade Brawler</title>
-
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="icon" href="data:image/svg+xml;utf8,
-    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
-      <rect width='64' height='64' rx='12' fill='%230b1220'/>
-      <circle cx='32' cy='36' r='16' fill='%23fff'/>
-      <ellipse cx='24' cy='14' rx='5' ry='10' fill='%23fff'/>
-      <ellipse cx='40' cy='14' rx='5' ry='10' fill='%23fff'/>
-      <circle cx='27' cy='34' r='3' fill='%230a0a0a'/>
-      <circle cx='37' cy='34' r='3' fill='%230a0a0a'/>
-    </svg>">
-  <style>.hidden{display:none}.panel{display:none}.panel.visible{display:block}body{font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}</style>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0b1a28" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="ui">
-    <div id="title" class="panel visible">
-      <h1>Usagi Arcade Brawler</h1>
-      <button id="btnStart">Start</button>
-      <button id="btnEndless">Infinite Challenge</button>
-      <p class="credit">© You, 2025</p>
-    </div>
+  <div id="app">
+    <!-- Canvas -->
+    <canvas id="gameCanvas" width="960" height="540" aria-label="Game canvas"></canvas>
 
-    <div id="paused" class="panel hidden">
-      <h2>Paused</h2>
-      <button id="btnResume">Resume</button>
-      <button id="btnQuit">Quit</button>
-    </div>
+    <!-- Title screen overlay -->
+    <section id="title-screen" class="overlay" role="dialog" aria-modal="true">
+      <div class="panel">
+        <h1>Usagi Arcade</h1>
+        <p class="subtitle">Tap/Click Start or press Space</p>
+        <div class="menu">
+          <button id="btn-start" class="btn primary">Start</button>
+          <button id="btn-controls" class="btn">Controls</button>
+          <button id="btn-credits" class="btn">Credits</button>
+        </div>
+        <div id="title-help" class="help" hidden>
+          <p>Desktop: ← → to walk, <kbd>Space</kbd> to jump, <kbd>A</kbd> to attack, <kbd>P</kbd> to pause.</p>
+          <p>Mobile: use on-screen D-pad and A/B buttons.</p>
+        </div>
+        <div id="title-credits" class="help" hidden>
+          <p>Fan-made prototype. Art placeholders. Built for HTML5.</p>
+        </div>
+      </div>
+    </section>
 
-    <div id="hud" class="hidden">
-      <div id="health"><span id="hpFill"></span></div>
-      <div id="score">Score: <b id="scoreNum">0</b></div>
-    </div>
+    <!-- HUD -->
+    <section id="hud" class="overlay no-pointer" aria-hidden="true">
+      <div class="hud-row">
+        <div class="health">
+          <div class="label">HP</div>
+          <div class="bar"><span id="hp-fill" style="width:100%"></span></div>
+        </div>
+        <div class="score" id="score">SCORE: 000000</div>
+      </div>
+    </section>
+
+    <!-- Touch controls (shown automatically on touch devices) -->
+    <section id="touch-controls" class="overlay" hidden aria-hidden="true">
+      <div class="touch-left">
+        <button id="btn-left" class="pad pad-left" aria-label="Move left">◄</button>
+        <button id="btn-right" class="pad pad-right" aria-label="Move right">►</button>
+      </div>
+      <div class="touch-right">
+        <button id="btn-jump" class="pad action" aria-label="Jump">B</button>
+        <button id="btn-attack" class="pad action" aria-label="Attack">A</button>
+        <button id="btn-pause" class="pad pause" aria-label="Pause">II</button>
+      </div>
+    </section>
   </div>
 
-  <canvas id="game" width="960" height="540"></canvas>
-
-  <!-- Single module entry -->
-  <script type="module" src="scripts/main.js"></script>
+  <script defer src="game.js"></script>
+  <script>
+    // Optional SW registration; safe no-op if unavailable
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    }
+  </script>
 </body>
 </html>
