@@ -1,48 +1,21 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <base href="./" />
-  <title>Usagi Arcade Brawler</title>
-  <link rel="stylesheet" href="styles.css" />
-  <!-- inline favicon (stops 404) -->
-  <link rel="icon" href="data:image/svg+xml;utf8,
-    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
-      <rect width='64' height='64' rx='12' fill='%230b1220'/>
-      <circle cx='32' cy='36' r='16' fill='%23fff'/>
-      <ellipse cx='24' cy='14' rx='5' ry='10' fill='%23fff'/>
-      <ellipse cx='40' cy='14' rx='5' ry='10' fill='%23fff'/>
-      <circle cx='27' cy='34' r='3' fill='%230a0a0a'/>
-      <circle cx='37' cy='34' r='3' fill='%230a0a0a'/>
-    </svg>">
-  <!-- tiny guard if CSS fails -->
-  <style>.hidden{display:none}.panel{display:none}.panel.visible{display:block}body{background:#0e0f13;color:#e8f0ff;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}</style>
-</head>
-<body>
-  <div id="ui">
-    <div id="title" class="panel visible">
-      <h1>Usagi Arcade Brawler</h1>
-      <button id="btnStart">Start</button>
-      <button id="btnEndless">Infinite Challenge</button>
-      <p class="credit">© You, 2025</p>
-    </div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Usagi Arcade Brawler</title>
+    <link rel="icon" type="image/png" href="assets/ui/favicon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <canvas id="game" width="960" height="540"></canvas>
 
-    <div id="paused" class="panel hidden">
-      <h2>Paused</h2>
-      <button id="btnResume">Resume</button>
-      <button id="btnQuit">Quit</button>
-    </div>
-
-    <div id="hud" class="hidden">
-      <div id="health"><span id="hpFill"></span></div>
-      <div id="score">Score: <b id="scoreNum">0</b></div>
-    </div>
-  </div>
-
-  <canvas id="game" width="960" height="540"></canvas>
-
-  <!-- cache-busted module -->
-  <script type="module" src="scripts/main.js?v=4"></script>
-</body>
+    <!-- Load order: helpers → preload → game → ui → debug → main -->
+    <script src="scripts/spriteRenderer.js"></script>
+    <script src="scripts/preload.js"></script>
+    <script src="scripts/game.js"></script>
+    <script src="scripts/ui.js"></script>
+    <script src="scripts/debugOverlay.js"></script>
+    <script src="scripts/main.js"></script>
+  </body>
 </html>
