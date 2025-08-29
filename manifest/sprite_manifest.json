@@ -1,19 +1,20 @@
 {
   "frameSize": { "w": 96, "h": 96 },
+  "meta": { "groundY": 420, "scale": 2.5 },
   "usagi": {
-    "idle":   { "path": "assets/sprites/usagi/idle.png",   "frames": 4, "fps": 8 },
-    "walk":   { "path": "assets/sprites/usagi/walk.png",   "frames": 8, "fps": 12 },
-    "attack": { "path": "assets/sprites/usagi/attack.png", "frames": 8, "fps": 18, "hitFrames": [3,4,5] },
-    "jump":   { "path": "assets/sprites/usagi/jump.png",   "frames": 4, "fps": 9 },
-    "hurt":   { "path": "assets/sprites/usagi/hurt.png",   "frames": 4, "fps": 10 },
-    "death":  { "path": "assets/sprites/usagi/death.png",  "frames": 6, "fps": 8 }
+    "idle":   { "path": "assets/sprites/usagi/idle.png",   "frames": 4, "fps": 8,  "loop": true },
+    "walk":   { "path": "assets/sprites/usagi/walk.png",   "frames": 8, "fps": 12, "loop": true },
+    "attack": { "path": "assets/sprites/usagi/attack.png", "frames": 8, "fps": 18, "loop": false, "hitFrames": [3,4,5] },
+    "jump":   { "path": "assets/sprites/usagi/jump.png",   "frames": 4, "fps": 9,  "loop": false },
+    "hurt":   { "path": "assets/sprites/usagi/hurt.png",   "frames": 4, "fps": 10, "loop": false },
+    "death":  { "path": "assets/sprites/usagi/death.png",  "frames": 6, "fps": 8,  "loop": false }
   },
   "ninja": {
-    "idle":   { "path": "assets/sprites/ninja/idle.png",   "frames": 4, "fps": 8 },
-    "walk":   { "path": "assets/sprites/ninja/walk.png",   "frames": 8, "fps": 12 },
-    "attack": { "path": "assets/sprites/ninja/attack.png", "frames": 6, "fps": 16, "hitFrames": [2,3] },
-    "jump":   { "path": "assets/sprites/ninja/jump.png",   "frames": 4, "fps": 9 },
-    "hurt":   { "path": "assets/sprites/ninja/hurt.png",   "frames": 4, "fps": 10 },
-    "death":  { "path": "assets/sprites/ninja/death.png",  "frames": 6, "fps": 8 }
+    "idle":   { "path": "assets/sprites/ninja/idle.png",   "frames": 4, "fps": 8,  "loop": true },
+    "walk":   { "path": "assets/sprites/ninja/walk.png",   "frames": 8, "fps": 12, "loop": true },
+    "attack": { "path": "assets/sprites/ninja/attack.png", "frames": 6, "fps": 16, "loop": false, "hitFrames": [2,3] },
+    "jump":   { "path": "assets/sprites/ninja/jump.png",   "frames": 4, "fps": 9,  "loop": false },
+    "hurt":   { "path": "assets/sprites/ninja/hurt.png",   "frames": 4, "fps": 10, "loop": false },
+    "death":  { "path": "assets/sprites/ninja/death.png",  "frames": 6, "fps": 8,  "loop": false }
   }
 }
