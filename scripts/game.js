@@ -43,18 +43,27 @@ function makePlayer(){
   };
 }
 
+const input = { left:false, right:false, attack:false };
+
+// Exported control functions (used by touch.js)
+export function pressLeft(){ input.left = true; }
+export function releaseLeft(){ input.left = false; }
+export function pressRight(){ input.right = true; }
+export function releaseRight(){ input.right = false; }
+export function pressAttack(){ input.attack = true; }
+export function releaseAttack(){ input.attack = false; }
+
 function update(dt){
-  // basic input (arrow keys / AD) for desktop testing; mobile tap could be added later
-  const k = input;
-  player.vx = (k.right? 120 : 0) - (k.left? 120 : 0);
-  if(k.attack){ player.state = 'attack'; } else if(player.vx !== 0){ player.state = 'walk'; } else { player.state = 'idle'; }
+  // Movement & state
+  player.vx = (input.right? 120 : 0) - (input.left? 120 : 0);
+  if(input.attack){ player.state = 'attack'; } else if(player.vx !== 0){ player.state = 'walk'; } else { player.state = 'idle'; }
   player.facingLeft = player.vx < 0;
   player.x += player.vx * dt;
   player.x = Math.max(0, Math.min(canvas.width - FW*SCALE, player.x));
 
   // animate
   player.anim.update(dt);
-  if(player.state === 'attack' && player.anim.sheet.frame === player.anims.attack.sheet.frames-1 && !k.attack){
+  if(player.state === 'attack' && player.anim.sheet.frame === player.anims.attack.sheet.frames-1 && !input.attack){
     player.state = 'idle';
     player.anims.attack.sheet.reset();
   }
@@ -73,17 +82,17 @@ function loop(ts){
   RAF = requestAnimationFrame(loop);
 }
 
-const input = { left:false, right:false, attack:false };
+// Desktop keyboard (still supported)
 window.addEventListener('keydown', e=>{
-  if(e.key === 'ArrowLeft' || e.key==='a') input.left = true;
-  if(e.key === 'ArrowRight'|| e.key==='d') input.right = true;
-  if(e.key.toLowerCase() === 'j' || e.key===' ') input.attack = true;
+  if(e.key === 'ArrowLeft' || e.key==='a') pressLeft();
+  if(e.key === 'ArrowRight'|| e.key==='d') pressRight();
+  if(e.key.toLowerCase() === 'j' || e.key===' ') pressAttack();
   if(e.key.toLowerCase() === 'p'){ togglePause(); }
 });
 window.addEventListener('keyup', e=>{
-  if(e.key === 'ArrowLeft' || e.key==='a') input.left = false;
-  if(e.key === 'ArrowRight'|| e.key==='d') input.right = false;
-  if(e.key.toLowerCase() === 'j' || e.key===' ') input.attack = false;
+  if(e.key === 'ArrowLeft' || e.key==='a') releaseLeft();
+  if(e.key === 'ArrowRight'|| e.key==='d') releaseRight();
+  if(e.key.toLowerCase() === 'j' || e.key===' ') releaseAttack();
 });
 
 export async function initGame(){
@@ -99,7 +108,6 @@ export function startGame(){
   RAF = requestAnimationFrame(loop);
 }
 export function startEndless(){
-  // same for now; later: spawn waves + scoring
   startGame();
 }
 export function togglePause(){
