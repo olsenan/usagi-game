@@ -1,15 +1,22 @@
-// Simple UI state helpers and bindings
+// scripts/ui.js
 const $ = sel => document.querySelector(sel);
 const show = el => el.classList.add('visible');
 const hide = el => el.classList.remove('visible');
 const hideEl = el => el.classList.add('hidden');
 const showEl = el => el.classList.remove('hidden');
 
+function bind(btn, handler){
+  if(!btn || !handler) return;
+  // Make taps always fire:
+  btn.addEventListener('pointerup', e => { e.preventDefault(); handler(); }, { passive:false });
+  btn.addEventListener('click',     e => { e.preventDefault(); handler(); });
+}
+
 export function bindUI({ onStart, onEndless, onResume, onQuit }){
-  $('#btnStart')  .addEventListener('click', onStart);
-  $('#btnEndless').addEventListener('click', onEndless);
-  $('#btnResume') .addEventListener('click', onResume);
-  $('#btnQuit')   .addEventListener('click', onQuit);
+  bind($('#btnStart'),   onStart);
+  bind($('#btnEndless'), onEndless);
+  bind($('#btnResume'),  onResume);
+  bind($('#btnQuit'),    onQuit);
 }
 
 export function showTitle(){
