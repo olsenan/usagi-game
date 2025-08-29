@@ -1,48 +1,143 @@
 :root{
-  --bg:#0b1220; --panel:rgba(5,7,10,.65); --accent:#22d3ee; --ink:#e5e7eb;
+  --bg:#0b1220;            /* background */
+  --panel:rgba(5,7,10,.65);/* glass panel */
+  --accent:#22d3ee;        /* cyan accent */
+  --ink:#e5e7eb;           /* text */
 }
-*{box-sizing:border-box}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--ink); overscroll-behavior:none}
 
-/* Let the UI receive all interactions. Make canvas ignore them so it cannot block the menu. */
+*{ box-sizing:border-box }
+
+html,body{
+  height:100%;
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  overscroll-behavior:none;             /* reduce bounce on mobile */
+}
+
+/* GAME SURFACE */
 canvas{
-  position:fixed; inset:0; margin:auto; max-width:100vw; max-height:100vh; outline:none; image-rendering:pixelated;
-  z-index:0; touch-action:none; -webkit-user-select:none; user-select:none; pointer-events:none; /* <— key change */
-}
-#ui{
-  z-index:10; position:fixed; inset:0; pointer-events:auto; /* <— key change */
-  display:grid; place-items:center; padding:16px;
+  position:fixed;
+  inset:0;
+  margin:auto;
+  max-width:100vw;
+  max-height:100vh;
+  outline:none;
+  image-rendering:pixelated;
+  z-index:0;                            /* base layer */
+  touch-action:none;                    /* prevent browser gestures */
+  -webkit-user-select:none;
+  user-select:none;
+  pointer-events:none;                  /* <— UI must receive taps on title screen */
 }
 
-.panel{ background:var(--panel); padding:24px 28px; border-radius:16px; backdrop-filter: blur(6px); text-align:center; }
-.panel h1{margin:0 0 16px 0; font-size:28px}
-.panel h2{margin:0 0 12px 0}
+/* UI OVERLAY (title/pause/HUD container) */
+#ui{
+  z-index:10;                           /* above canvas and touch controls */
+  position:fixed;
+  inset:0;
+  display:grid;
+  place-items:center;
+  padding:16px;
+  pointer-events:auto;                  /* allow clicking buttons */
+}
+
+/* Panels (title, pause) */
+.panel{
+  background:var(--panel);
+  padding:24px 28px;
+  border-radius:16px;
+  backdrop-filter: blur(6px);
+  text-align:center;
+}
+.panel h1{ margin:0 0 16px 0; font-size:28px; }
+.panel h2{ margin:0 0 12px 0; }
+
+/* Buttons */
 #ui button{
-  pointer-events:auto; cursor:pointer; font-weight:700; margin:6px 8px;
-  background:linear-gradient(180deg, #1f2937, #0f172a); color:var(--ink);
-  border:1px solid #111827; padding:.75rem 1.25rem; border-radius:12px;
+  pointer-events:auto;
+  cursor:pointer;
+  font-weight:700;
+  margin:6px 8px;
+  background:linear-gradient(180deg, #1f2937, #0f172a);
+  color:var(--ink);
+  border:1px solid #111827;
+  padding:.75rem 1.25rem;
+  border-radius:12px;
   box-shadow:0 6px 20px rgba(0,0,0,.35);
+  transition:transform .06s ease, outline-color .06s ease, color .06s ease;
 }
 #ui button:hover{ outline:1px solid var(--accent); color:#fff; }
-.hidden{ display:none }
+#ui button:active{ transform: translateY(1px); }
 
-#hud{ position:fixed; top:10px; left:10px; pointer-events:none; }
-#health{ width:240px; height:16px; border:1px solid #1f2937; border-radius:8px; overflow:hidden; background:#0f172a }
-#hpFill{ display:block; height:100%; width:100%; background:#22c55e }
+.hidden{ display:none }                 /* utility for visibility toggles */
+
+/* HUD */
+#hud{
+  position:fixed;
+  top:10px;
+  left:10px;
+  pointer-events:none;                  /* HUD is informational */
+}
+#health{
+  width:240px;
+  height:16px;
+  border:1px solid #1f2937;
+  border-radius:8px;
+  overflow:hidden;
+  background:#0f172a;
+}
+#hpFill{
+  display:block;
+  height:100%;
+  width:100%;
+  background:#22c55e;
+}
 #score{ margin-top:8px; font-weight:700 }
 
-/* Touch controls (if you added touch.js) */
+/* === Touch Controls (mobile onscreen buttons) ===
+   Only shown if you import scripts/touch.js, which injects #touch. */
 #touch{
-  position:fixed; inset:0; z-index:9; pointer-events:none;
-  display:flex; align-items:flex-end; justify-content:space-between; padding:14px;
+  position:fixed;
+  inset:0;
+  z-index:9;                            /* below #ui, above canvas */
+  pointer-events:none;                  /* container ignores; children enable */
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  padding:14px;
 }
-#touch .tc-left, #touch .tc-right{ display:flex; gap:12px; pointer-events:auto; }
+#touch .tc-left,
+#touch .tc-right{
+  display:flex;
+  gap:12px;
+  pointer-events:auto;                  /* enable taps on buttons */
+}
 #touch .tc-btn{
-  width:64px; height:64px; border-radius:50%;
+  width:64px;
+  height:64px;
+  border-radius:50%;
   background:linear-gradient(180deg, #1f2937, #0f172a);
-  border:1px solid #111827; color:#e5e7eb; font-weight:800; font-size:20px;
+  border:1px solid #111827;
+  color:#e5e7eb;
+  font-weight:800;
+  font-size:20px;
   box-shadow:0 6px 20px rgba(0,0,0,.35);
-  display:flex; align-items:center; justify-content:center;
-  -webkit-user-select:none; user-select:none; touch-action:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  -webkit-user-select:none;
+  user-select:none;
+  touch-action:none;                    /* keep taps crisp */
 }
-#touch .tc-btn:active{ outline:2px solid var(--accent); color:#fff; }
+#touch .tc-btn:active{
+  outline:2px solid var(--accent);
+  color:#fff;
+}
+
+/* Optional: hide touch controls on large screens
+@media (min-width: 920px){
+  #touch { display:none; }
+}
+*/
+```0
