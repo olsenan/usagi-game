@@ -22,3 +22,24 @@ canvas{position:fixed;inset:0;margin:auto;max-width:100vw;max-height:100vh;outli
 #health{ width:240px; height:16px; border:1px solid #1f2937; border-radius:8px; overflow:hidden; background:#0f172a }
 #hpFill{ display:block; height:100%; width:100%; background:#22c55e }
 #score{ margin-top:8px; font-weight:700 }
+
+/* === Touch Controls === */
+#touch{
+  position:fixed; inset:0; z-index:9; pointer-events:none;
+  display:flex; align-items:flex-end; justify-content:space-between; padding:14px;
+}
+#touch .tc-left, #touch .tc-right{ display:flex; gap:12px; }
+#touch .tc-left{ pointer-events:auto; }
+#touch .tc-right{ pointer-events:auto; }
+#touch .tc-btn{
+  width:64px; height:64px; border-radius:50%;
+  background:linear-gradient(180deg, #1f2937, #0f172a);
+  border:1px solid #111827; color:#e5e7eb; font-weight:800; font-size:20px;
+  box-shadow:0 6px 20px rgba(0,0,0,.35);
+  display:flex; align-items:center; justify-content:center;
+}
+#touch .tc-btn:active{ outline:2px solid var(--accent); color:#fff; }
+@media (min-width: 920px){
+  /* Hide touch on big desktops if you want */
+  /* #touch { display:none; } */
+}
