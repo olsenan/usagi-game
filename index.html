@@ -2,13 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
   <base href="./" />
   <title>Usagi Arcade Brawler</title>
 
   <link rel="stylesheet" href="styles.css" />
-
-  <!-- Inline SVG favicon (safe on GH Pages). Swap to assets/ui/favicon.png if you prefer -->
   <link rel="icon" href="data:image/svg+xml;utf8,
     <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
       <rect width='64' height='64' rx='12' fill='%230b1220'/>
@@ -18,13 +16,9 @@
       <circle cx='27' cy='34' r='3' fill='%230a0a0a'/>
       <circle cx='37' cy='34' r='3' fill='%230a0a0a'/>
     </svg>">
-  <style>
-    .hidden{display:none}.panel{display:none}.panel.visible{display:block}
-    body{font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}
-  </style>
+  <style>.hidden{display:none}.panel{display:none}.panel.visible{display:block}body{font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}</style>
 </head>
 <body>
-  <!-- UI LAYER -->
   <div id="ui">
     <div id="title" class="panel visible">
       <h1>Usagi Arcade Brawler</h1>
@@ -45,7 +39,6 @@
     </div>
   </div>
 
-  <!-- GAME CANVAS -->
   <canvas id="game" width="960" height="540"></canvas>
 
   <!-- Single module entry -->
