@@ -25,9 +25,18 @@ function beep(freq = 440, dur = 0.08, gain = 0.03) {
 }
 
 class Animated {
-  constructor(sheet){ Object.assign(this, sheet); this.time=0; this.frame=0; }
-  reset(){ this.time=0; this.frame=0; }
-  update(dt){ const n=Math.max(1,this.frames|0); const f=(this.fps||8)*(this.time+=dt); this.frame=this.loop?Math.floor(f)%n:Math.min(n-1,Math.floor(f)); }
+  constructor(sheet){
+    Object.assign(this, sheet);
+    this.time = 0;
+    this.frame = 0;
+  }
+  reset(){ this.time = 0; this.frame = 0; }
+  update(dt){
+    const n = Math.max(1, this.frames|0);
+    this.time += dt * (this.fps || 1);
+    const f = this.time;
+    this.frame = this.loop ? Math.floor(f) % n : Math.min(n-1, Math.floor(f));
+  }
 }
 
 const hitbox = e => ({ x:e.x-20, y:e.y-64, w:40, h:60 });
